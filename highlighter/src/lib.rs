@@ -12,9 +12,9 @@ use tree_sitter::{SyntaxTree, SyntaxTreeNode};
 
 use crate::config::LanguageConfig;
 use crate::injections_query::InjectionLanguageMarker;
-use crate::parse::LayerUpdateFlags;
 
 pub use crate::config::read_query;
+use crate::parse::LayerUpdateFlags;
 pub use tree_sitter;
 // pub use pretty_print::pretty_print_tree;
 // pub use tree_cursor::TreeCursor;
@@ -68,7 +68,7 @@ impl Syntax {
         let root_layer = LayerData {
             parse_tree: None,
             config,
-            flags: LayerUpdateFlags::empty(),
+            flags: LayerUpdateFlags::default(),
             ranges: vec![tree_sitter::Range {
                 start_byte: 0,
                 end_byte: u32::MAX,
@@ -88,11 +88,7 @@ impl Syntax {
         let mut layers = HopSlotMap::with_capacity_and_key(32);
         let root = layers.insert(root_layer);
 
-        let mut syntax = Self {
-            root,
-            layers,
-            layer_lut: HashTable::with_capacity(32),
-        };
+        let mut syntax = Self { root, layers };
 
         let res = syntax.update(source, &[], injection_callback);
 
@@ -160,13 +156,13 @@ impl Syntax {
 
 #[derive(Debug, Clone)]
 pub struct Injection {
-    pub byte_range: Range,
+    pub range: Range,
     pub layer: Layer,
 }
 
 #[derive(Debug)]
 pub struct LayerData {
-    pub config: Arc<LanguageConfig>,
+    config: Arc<LanguageConfig>,
     parse_tree: Option<SyntaxTree>,
     ranges: Box<[tree_sitter::Range]>,
     /// a list of **sorted** non-overlapping injection ranges. Note that
@@ -211,10 +207,10 @@ impl LayerData {
     pub fn injection_at_byte_idx(&self, idx: u32) -> Option<&Injection> {
         let i = self
             .injections
-            .partition_point(|range| range.byte_range.start < idx);
+            .partition_point(|range| range.range.start < idx);
         self.injections
             .get(i)
-            .filter(|injection| injection.byte_range.end > idx)
+            .filter(|injection| injection.range.end > idx)
     }
 }
 

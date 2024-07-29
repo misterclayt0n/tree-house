@@ -1,5 +1,5 @@
 [package]
-name = "tree-sitter-helix"
+name = "twig-sitter"
 description = "Alternative rust bindings for the tree-sitter C library"
 authors = ["Pascal Kuthe <pascalkuthe@pm.me>"]
 version = "0.1.0"

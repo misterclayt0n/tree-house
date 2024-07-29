@@ -62,7 +62,7 @@ impl<'a, S: Default> QueryIterLayerManager<'a, S> {
                 let layer = &self.syntax.layers[injection.layer];
                 let injection_start = layer
                     .injections
-                    .partition_point(|child| child.byte_range.start < injection.byte_range.start);
+                    .partition_point(|child| child.range.start < injection.range.start);
                 let cursor = InactiveQueryCursor::new().execute_query(
                     self.query,
                     &self.node,
@@ -100,7 +100,7 @@ impl<'a, LayerState: Default> QueryIter<'a, LayerState> {
     ) -> Self {
         // create fake injection for query root
         let injection = Injection {
-            byte_range: node.byte_range(),
+            range: node.byte_range(),
             layer,
         };
         let mut layer_manager = Box::new(QueryIterLayerManager {
@@ -175,11 +175,13 @@ impl<'a, S: Default> Iterator for QueryIter<'a, S> {
 
     fn next(&mut self) -> Option<QueryIterEvent<S>> {
         loop {
-            let next_injection = self.current_layer.injections.peek().filter(|injection| {
-                injection.byte_range.start < self.current_injection.byte_range.end
-            });
+            let next_injection = self
+                .current_layer
+                .injections
+                .peek()
+                .filter(|injection| injection.range.start < self.current_injection.range.end);
             let next_match = self.current_layer.query_iter.peek().filter(|matched_node| {
-                matched_node.byte_range.start < self.current_injection.byte_range.end
+                matched_node.byte_range.start < self.current_injection.range.end
             });
 
             match (next_match, next_injection) {
@@ -194,12 +196,12 @@ impl<'a, S: Default> Iterator for QueryIter<'a, S> {
                     return Some(QueryIterEvent::Match(matched_node));
                 }
                 (Some(matched_node), Some(injection))
-                    if matched_node.byte_range.start <= injection.byte_range.end =>
+                    if matched_node.byte_range.start <= injection.range.end =>
                 {
                     // consume match
                     let matched_node = self.current_layer.query_iter.consume();
                     // ignore nodes that are overlapped by the injection
-                    if matched_node.byte_range.start <= injection.byte_range.start {
+                    if matched_node.byte_range.start <= injection.range.start {
                         return Some(QueryIterEvent::Match(matched_node));
                     }
                 }
@@ -226,9 +228,9 @@ pub enum QueryIterEvent<State = ()> {
 impl<S> QueryIterEvent<S> {
     pub fn start_byte(&self) -> u32 {
         match self {
-            QueryIterEvent::EnterInjection(injection) => injection.byte_range.start,
+            QueryIterEvent::EnterInjection(injection) => injection.range.start,
             QueryIterEvent::Match(mat) => mat.byte_range.start,
-            QueryIterEvent::ExitInjection { injection, .. } => injection.byte_range.start,
+            QueryIterEvent::ExitInjection { injection, .. } => injection.range.start,
         }
     }
 }

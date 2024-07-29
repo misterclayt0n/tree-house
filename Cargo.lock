@@ -36,12 +36,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
 
 [[package]]
-name = "bitflags"
-version = "2.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
-
-[[package]]
 name = "cc"
 version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -69,14 +63,13 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "arc-swap",
- "bitflags",
  "hashbrown",
  "once_cell",
  "regex",
  "regex-cursor",
  "ropey",
  "slotmap",
- "tree-sitter-helix",
+ "twig-sitter",
 ]
 
 [[package]]
@@ -230,7 +223,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tree-sitter-helix"
+name = "twig-sitter"
 version = "0.1.0"
 dependencies = [
  "cc",

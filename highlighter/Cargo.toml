@@ -16,12 +16,11 @@ arc-swap = "1"
 hashbrown = { version = "0.14.3", features = ["raw"] }
 regex = "1"
 regex-cursor = "0.1.4"
-bitflags = "2.4"
 ahash = { version = "0.8.11", features = ["std"], default-features = false }
 
 [dependencies.tree-sitter]
 version = "0.1.0"
-package = "tree-sitter-helix"
+package = "twig-sitter"
 path = "../bindings"
 features = ["ropey"]
 
