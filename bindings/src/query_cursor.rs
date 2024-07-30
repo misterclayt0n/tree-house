@@ -238,7 +238,7 @@ impl<'tree> QueryMatch<'_, 'tree> {
             .map(|mat| &mat.syntax_node)
     }
 
-    pub fn matched_node(&self, i: MatchedNodeIdx) -> &MatchedNode {
+    pub fn matched_node(&self, i: MatchedNodeIdx) -> &MatchedNode<'tree> {
         &self.matched_nodes[i as usize]
     }
 

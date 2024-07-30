@@ -4,6 +4,7 @@ pub mod query;
 mod query_cursor;
 mod syntax_tree;
 mod syntax_tree_node;
+mod tree_cursor;
 
 #[cfg(feature = "ropey")]
 mod ropey;
@@ -18,6 +19,7 @@ pub use query::{Capture, Pattern, Query, QueryStr};
 pub use query_cursor::{InactiveQueryCursor, MatchedNode, MatchedNodeIdx, QueryCursor, QueryMatch};
 pub use syntax_tree::{InputEdit, SyntaxTree};
 pub use syntax_tree_node::SyntaxTreeNode;
+pub use tree_cursor::TreeCursor;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

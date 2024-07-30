@@ -4,6 +4,7 @@ use std::ops::Range;
 use std::ptr::NonNull;
 
 use crate::syntax_tree::SyntaxTree;
+use crate::tree_cursor::TreeCursor;
 use crate::Grammar;
 
 #[repr(C)]
@@ -192,27 +193,24 @@ impl<'tree> SyntaxTreeNode<'tree> {
             ))
         }
     }
-    // /// Iterate over this node's children.
-    // ///
-    // /// A [`TreeCursor`] is used to retrieve the children efficiently. Obtain
-    // /// a [`TreeCursor`] by calling [`Tree::walk`] or [`SyntaxTreeNode::walk`]. To avoid
-    // /// unnecessary allocations, you should reuse the same cursor for
-    // /// subsequent calls to this method.
-    // ///
-    // /// If you're walking the tree recursively, you may want to use the
-    // /// [`TreeCursor`] APIs directly instead.
-    // pub fn children<'cursor>(
-    //     &self,
-    //     cursor: &'cursor mut TreeCursor<'tree>,
-    // ) -> impl ExactSizeIterator<Item = SyntaxTreeNode<'tree>> + 'cursor {
-    //     cursor.reset(self.to_raw());
-    //     cursor.goto_first_child();
-    //     (0..self.child_count()).map(move |_| {
-    //         let result = cursor.node();
-    //         cursor.goto_next_sibling();
-    //         result
-    //     })
-    // }
+    /// Iterate over this node's children.
+    ///
+    /// A [`TreeCursor`] is used to retrieve the children efficiently. Obtain
+    /// a [`TreeCursor`] by calling [`Tree::walk`] or [`SyntaxTreeNode::walk`]. To avoid
+    /// unnecessary allocations, you should reuse the same cursor for
+    /// subsequent calls to this method.
+    ///
+    /// If you're walking the tree recursively, you may want to use the
+    /// [`TreeCursor`] APIs directly instead.
+    pub fn children(&self) -> impl ExactSizeIterator<Item = SyntaxTreeNode<'tree>> {
+        let mut cursor = TreeCursor::new(self);
+        cursor.goto_first_child();
+        (0..self.child_count()).map(move |_| {
+            let result = cursor.node();
+            cursor.goto_next_sibling();
+            result
+        })
+    }
 }
 
 unsafe impl Send for SyntaxTreeNode<'_> {}

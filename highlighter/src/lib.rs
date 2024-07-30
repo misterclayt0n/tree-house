@@ -1,13 +1,12 @@
-use ahash::RandomState;
-use hashbrown::HashTable;
 use ropey::RopeSlice;
 
-use slotmap::{new_key_type, HopSlotMap};
+use slab::Slab;
 
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use std::str;
 use std::sync::Arc;
+use std::time::Duration;
 use tree_sitter::{SyntaxTree, SyntaxTreeNode};
 
 use crate::config::LanguageConfig;
@@ -27,6 +26,17 @@ mod parse;
 pub mod query_iter;
 pub mod text_object;
 // mod tree_cursor;
+
+/// A layer represent a single a single syntax tree that reprsents (part of)
+/// a file parsed with a tree-sitter grammar. See [`Syntax`]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct Layer(u32);
+
+impl Layer {
+    fn idx(self) -> usize {
+        self.0 as usize
+    }
+}
 
 /// The Tree siitter syntax tree for a single language.
 ///
@@ -55,7 +65,7 @@ pub mod text_object;
 /// such multi injection nodes.
 #[derive(Debug)]
 pub struct Syntax {
-    layers: HopSlotMap<Layer, LayerData>,
+    layers: Slab<LayerData>,
     root: Layer,
 }
 
@@ -63,8 +73,9 @@ impl Syntax {
     pub fn new(
         source: RopeSlice,
         config: Arc<LanguageConfig>,
+        timeout: Duration,
         injection_callback: impl Fn(&InjectionLanguageMarker) -> Option<Arc<LanguageConfig>>,
-    ) -> Option<Self> {
+    ) -> Result<Self, Error> {
         let root_layer = LayerData {
             parse_tree: None,
             config,
@@ -77,35 +88,37 @@ impl Syntax {
                     row: u32::MAX,
                     col: u32::MAX,
                 },
-            }]
-            .into_boxed_slice(),
+            }],
             injections: Vec::new(),
             parent: None,
         };
-
-        // track scope_descriptor: a Vec of scopes for item in tree
-
-        let mut layers = HopSlotMap::with_capacity_and_key(32);
+        let mut layers = Slab::with_capacity(32);
         let root = layers.insert(root_layer);
+        let mut syntax = Self {
+            root: Layer(root as u32),
+            layers,
+        };
+        syntax
+            .update(source, timeout, &[], injection_callback)
+            .map(|_| syntax)
+    }
 
-        let mut syntax = Self { root, layers };
+    fn layer(&self, layer: Layer) -> &LayerData {
+        &self.layers[layer.idx()]
+    }
 
-        let res = syntax.update(source, &[], injection_callback);
-
-        if res.is_err() {
-            return None;
-        }
-        Some(syntax)
+    fn layer_mut(&mut self, layer: Layer) -> &mut LayerData {
+        &mut self.layers[layer.idx()]
     }
 
     pub fn tree(&self) -> &SyntaxTree {
-        self.layers[self.root].tree()
+        self.layer(self.root).tree()
     }
 
     #[inline]
     pub fn tree_for_byte_range(&self, start: usize, end: usize) -> &SyntaxTree {
         let layer = self.layer_for_byte_range(start, end);
-        self.layers[layer].tree()
+        self.layer(layer).tree()
     }
 
     #[inline]
@@ -133,7 +146,7 @@ impl Syntax {
     pub fn layer_for_byte_range(&self, start: usize, end: usize) -> Layer {
         let mut cursor = self.root;
         loop {
-            let layer = &self.layers[cursor];
+            let layer = &self.layers[cursor.idx()];
             let Some(start_injection) = layer.injection_at_byte_idx(start as u32) else {
                 break;
             };
@@ -164,7 +177,7 @@ pub struct Injection {
 pub struct LayerData {
     config: Arc<LanguageConfig>,
     parse_tree: Option<SyntaxTree>,
-    ranges: Box<[tree_sitter::Range]>,
+    ranges: Vec<tree_sitter::Range>,
     /// a list of **sorted** non-overlapping injection ranges. Note that
     /// injection ranges are not relative to the start of this layer but the
     /// start of the root layer
@@ -228,12 +241,6 @@ fn byte_range_to_str(range: Range, source: RopeSlice) -> Cow<str> {
     Cow::from(source.byte_slice(range.start as usize..range.end as usize))
 }
 
-new_key_type! {
-    /// A layer represent a single a single syntax tree that reprsents (part of)
-    /// a file parsed with a tree-sitter grammar. See [`Syntax`]
-    pub struct Layer;
-}
-
 /// The maximum number of in-progress matches a TS cursor can consider at once.
 /// This is set to a constant in order to avoid performance problems for medium to large files. Set with `set_match_limit`.
 /// Using such a limit means that we lose valid captures, so there is fundamentally a tradeoff here.
@@ -253,14 +260,6 @@ new_key_type! {
 /// 64 is too low for some languages though. In particular, it breaks some highlighting for record fields in Erlang record definitions.
 /// This number can be increased if new syntax highlight breakages are found, as long as the performance penalty is not too high.
 pub const TREE_SITTER_MATCH_LIMIT: u32 = 256;
-
-// we don't care about dosh resistance and using a const hasher is easier here
-static HASHER: RandomState = RandomState::with_seeds(
-    0x8a2e_03a0_08f3_08fe,
-    0x7644_ec4e_263f_6a88,
-    0x38f2_299f_85a3_f3e9,
-    0xfa98_6c81_a409_31d0,
-);
 
 // use 32 bit ranges since TS doesn't support files larger than 2GiB anyway
 // and it allows us to save a lot memory/improve cache efficency

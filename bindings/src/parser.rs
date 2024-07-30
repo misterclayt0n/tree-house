@@ -132,7 +132,7 @@ pub struct InvalidRangesErrror;
 
 impl fmt::Display for InvalidRangesErrror {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "include ranges are overlap or are not sorted",)
+        write!(f, "include ranges overlap or are not sorted",)
     }
 }
 impl std::error::Error for InvalidRangesErrror {}

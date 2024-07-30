@@ -59,7 +59,7 @@ impl<'a, S: Default> QueryIterLayerManager<'a, S> {
         self.active_layers
             .remove(&injection.layer)
             .unwrap_or_else(|| {
-                let layer = &self.syntax.layers[injection.layer];
+                let layer = self.syntax.layer(injection.layer);
                 let injection_start = layer
                     .injections
                     .partition_point(|child| child.range.start < injection.range.start);
