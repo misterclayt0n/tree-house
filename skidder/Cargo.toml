@@ -1,0 +1,17 @@
+[package]
+name = "skidder"
+version = "0.1.0"
+edition = "2021"
+description = "A package mangager for tree-sitter"
+authors = ["Pascal Kuthe <pascalkuthe@pm.me>"]
+license = "MPL-2.0"
+repository = "https://github.com/helix-editor/sappling"
+readme = "../README.md"
+rust-version = "1.76.0"
+
+[dependencies]
+anyhow = "1.0.86"
+cc = "1.1.7"
+sha1 = "0.10.6"
+tempfile = "3.10.1"
+
