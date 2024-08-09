@@ -3,10 +3,13 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{self, AtomicUsize};
-use std::sync::{mpsc, Mutex};
+use std::sync::Mutex;
+use std::time::Duration;
 use std::{fs, io, thread};
 
 use anyhow::{bail, ensure, Context, Result};
+use indicatif::{ProgressBar, ProgressStyle};
+use serde::{Deserialize, Serialize};
 
 #[cfg(not(windows))]
 const LIB_EXTENSION: &str = "so";
@@ -100,7 +103,15 @@ impl Repo {
     }
 
     pub fn has_grammar(&self, config: &Config, grammar: &str) -> bool {
-        self.dir(config).join(grammar).join("parser.c").exists()
+        self.dir(config)
+            .join(grammar)
+            .join("metadata.json")
+            .exists()
+    }
+
+    pub fn read_metadata(&self, config: &Config, grammar: &str) -> Result<Metadata> {
+        let path = self.dir(config).join(grammar).join("metadata.json");
+        Metadata::read(&path)
     }
 
     pub fn list_grammars(&self, config: &Config) -> Result<Vec<PathBuf>> {
@@ -112,7 +123,7 @@ impl Repo {
                     return Ok(None);
                 }
                 let path = dent.path();
-                if !path.join("parser.c").exists() {
+                if !path.join("metadata.json").exists() {
                     return Ok(None);
                 }
                 Ok(Some(dent.path()))
@@ -185,6 +196,12 @@ pub fn build_all_grammars(
     concurrency: Option<NonZeroUsize>,
 ) -> Result<usize> {
     let grammars = list_grammars(config)?;
+    let bar = ProgressBar::new(grammars.len() as u64).with_style(
+        ProgressStyle::with_template("{spinner} {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+            .unwrap(),
+    );
+    bar.set_message("Compiling");
+    bar.enable_steady_tick(Duration::from_millis(100));
     let i = AtomicUsize::new(0);
     let concurrency = concurrency
         .or_else(|| thread::available_parallelism().ok())
@@ -198,15 +215,47 @@ pub fn build_all_grammars(
                 };
                 let name = grammar.file_name().unwrap().to_str().unwrap();
                 if let Err(err) = build::build_grammar(name, grammar, force_rebuild) {
-                    eprintln!("{err}");
+                    for err in err.chain() {
+                        bar.println(format!("error: {err}"))
+                    }
                     failed.lock().unwrap().push(name.to_owned())
                 }
+                bar.inc(1);
             });
         }
     });
     let failed = failed.into_inner().unwrap();
-    if failed.is_empty() {
+    if !failed.is_empty() {
         bail!("failed to build grammars {failed:?}")
     }
     Ok(grammars.len())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Metadata {
+    /// The git remote of the query upstreama
+    pub repo: String,
+    /// The git remote of the query
+    pub rev: String,
+    /// The SPDX license identifier
+    #[serde(default)]
+    pub license: String,
+    /// Wether to use the new query precedence
+    /// where later matches take priority.
+    #[serde(default)]
+    pub new_prescedence: bool,
+}
+
+impl Metadata {
+    pub fn read(path: &Path) -> Result<Metadata> {
+        let json = fs::read_to_string(path)
+            .with_context(|| format!("couldn't read {}", path.display()))?;
+        serde_json::from_str(&json)
+            .with_context(|| format!("invalid metadata.json file at {}", path.display()))
+    }
+    pub fn write(&self, path: &Path) -> Result<()> {
+        let json = serde_json::to_string_pretty(&self).unwrap();
+        fs::write(path, json).with_context(|| format!("failed to write {}", path.display()))
+    }
 }

@@ -23,7 +23,7 @@ fn is_fresh(grammar_dir: &Path, files: &[&str], force: bool) -> Result<(Checksum
             .with_context(|| format!("failed to read {}", path.display()))?;
         hasher.update(file);
         // paddding bytes
-        hasher.update(&[0, 0, 0, 0]);
+        hasher.update([0, 0, 0, 0]);
     }
     let checksum = hasher.finalize();
     if force {
@@ -32,7 +32,7 @@ fn is_fresh(grammar_dir: &Path, files: &[&str], force: bool) -> Result<(Checksum
     let Ok(prev_checksum) = fs::read(cookie) else {
         return Ok((checksum.into(), false));
     };
-    return Ok((checksum.into(), prev_checksum == checksum[..]));
+    Ok((checksum.into(), prev_checksum == checksum[..]))
 }
 
 const BUILD_TARGET: &str = env!("BUILD_TARGET");
@@ -102,7 +102,7 @@ pub fn build_grammar(grammar_name: &str, grammar_dir: &Path, force: bool) -> Res
     }
     ensure!(
         grammar_dir.join("parser.c").exists(),
-        "fialed to compile {grammar_name}: parser.c not found!"
+        "failed to compile {grammar_name}: parser.c not found!"
     );
     let build_dir = TempDir::new().context("fialed to create temporary build dierctory")?;
     let (mut cmd, output_path) = compiler_command(
@@ -124,6 +124,6 @@ pub fn build_grammar(grammar_name: &str, grammar_dir: &Path, force: bool) -> Res
         grammar_dir.join(grammar_name).with_extension(LIB_EXTENSION),
     )
     .context("failed to create library")?;
-    let _ = fs::write(grammar_dir.join(".BUILD_COOKIE"), &hash);
+    let _ = fs::write(grammar_dir.join(".BUILD_COOKIE"), hash);
     Ok(())
 }
