@@ -149,6 +149,7 @@ impl Repo {
             }
             config.git(&["fetch", "origin", branch], &dir)?;
             config.git(&["reset", "--hard", &format!("origin/{}", branch)], &dir)?;
+            return Ok(());
         }
         let _ = fs::create_dir_all(&dir);
         ensure!(dir.exists(), "failed to create directory {}", dir.display());
