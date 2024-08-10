@@ -94,7 +94,11 @@ impl CompilerCommand {
         } else {
             C_COMPILER.get_or_init(|| {
                 cc::Build::new()
-                    .cpp(false)
+                    // Note that we use a C++ compiler but force C mode below
+                    // with "-xc". This is important for compilation of grammars
+                    // that have C++ scanners. If we used `cpp(false)` then the
+                    // scanner might miss symbols from the C++ standard library.
+                    .cpp(true)
                     .debug(false)
                     .opt_level(3)
                     .std("c11")
@@ -135,6 +139,9 @@ impl CompilerCommand {
                 CompilerCommand::BuildAndLink { obj_files } => {
                     cmd.args(obj_files);
                 }
+            }
+            if !cpp {
+                cmd.arg("-xc");
             }
             cmd.arg(file);
         };
