@@ -10,50 +10,42 @@ use ruzstd::frame_decoder::FrameDecoderError;
 use ruzstd::{BlockDecodingStrategy, FrameDecoder};
 use sha1::{Digest, Sha1};
 use tempfile::TempDir;
+use walkdir::WalkDir;
 
 use crate::{Metadata, LIB_EXTENSION};
 
 type Checksum = [u8; 20];
 fn is_fresh(grammar_dir: &Path, force: bool) -> Result<(Checksum, bool)> {
-    fn recursive_hash(hasher: &mut Sha1, dir: &Path) -> Result<()> {
-        for file in fs::read_dir(dir)? {
-            let file = file?;
-            let file_type = file.file_type()?;
-            if file_type.is_dir() {
-                recursive_hash(hasher, &file.path())?;
-                continue;
-            }
-            // Hash any .c, .cc or .h file
-            if !file_type.is_file() {
-                continue;
-            }
-            let file_name = file.file_name();
-            let Some(file_name) = file_name.to_str() else {
-                continue;
-            };
-            let Some((_, extension)) = file_name.rsplit_once('.') else {
-                continue;
-            };
-            if matches!(extension, "h" | "c" | "cc") {
-                continue;
-            }
-            let path = file.path();
-
-            hasher.update(file_name.as_bytes());
-            hasher.update([0, 0, 0, 0]);
-            File::open(&path)
-                .and_then(|mut file| io::copy(&mut file, hasher))
-                .with_context(|| format!("failed to read {}", path.display()))?;
-            hasher.update([0, 0, 0, 0]);
-        }
-
-        Ok(())
-    }
-
     let src_dir = grammar_dir.join("src");
     let cookie = grammar_dir.join(".BUILD_COOKIE");
     let mut hasher = Sha1::new();
-    recursive_hash(&mut hasher, &src_dir)?;
+    for file in WalkDir::new(src_dir) {
+        let file = file?;
+        let file_type = file.file_type();
+        // Hash any .c, .cc or .h file
+        if !file_type.is_file() {
+            continue;
+        }
+        let file_name = file.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+        let Some((_, extension)) = file_name.rsplit_once('.') else {
+            continue;
+        };
+        if matches!(extension, "h" | "c" | "cc") {
+            continue;
+        }
+        let path = file.path();
+
+        hasher.update(file_name.as_bytes());
+        hasher.update([0, 0, 0, 0]);
+        File::open(path)
+            .and_then(|mut file| io::copy(&mut file, &mut hasher))
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        hasher.update([0, 0, 0, 0]);
+    }
+
     let checksum = hasher.finalize();
     if force {
         return Ok((checksum.into(), false));
