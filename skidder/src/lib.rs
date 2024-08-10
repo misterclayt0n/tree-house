@@ -102,6 +102,16 @@ impl Repo {
         }
     }
 
+    pub fn compiled_parser_path(&self, config: &Config, grammar: &str) -> PathBuf {
+        self.grammar_dir(config, grammar)
+            .join(grammar)
+            .with_extension(LIB_EXTENSION)
+    }
+
+    pub fn grammar_dir(&self, config: &Config, grammar: &str) -> PathBuf {
+        self.dir(config).join(grammar)
+    }
+
     pub fn has_grammar(&self, config: &Config, grammar: &str) -> bool {
         self.dir(config)
             .join(grammar)
