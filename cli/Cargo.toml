@@ -17,5 +17,4 @@ walkdir = "2.5.0"
 xflags = "0.3.2"
 
 skidder = { path = "../skidder" }
-flate2 = "1.0.31"
 

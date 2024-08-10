@@ -6,8 +6,6 @@ use std::process::Command;
 use std::{fs, io};
 
 use anyhow::{bail, Context, Result};
-use flate2::read::DeflateEncoder;
-use flate2::Compression;
 use serde::Deserialize;
 use skidder::Metadata;
 use walkdir::WalkDir;
@@ -90,12 +88,20 @@ impl Import {
                         && file.path().parent() == Some(&src_path)
                         && dir == "src"
                     {
-                        File::create(&dst_path).and_then(|mut dst| {
-                            let mut src =
-                                DeflateEncoder::new(File::open(file.path())?, Compression::best());
-                            io::copy(&mut src, &mut dst)?;
-                            Ok(())
-                        })
+                        // File::create(&dst_path).and_then(|mut dst| {
+                        Command::new("zstd")
+                            .args(["--ultra", "-22", "-f", "-o"])
+                            .arg(&dst_path)
+                            .arg(file.path())
+                            .status()
+                            .map(|res| {
+                                assert!(res.success());
+                            })
+                        // let mut src =
+                        //     DeflateEncoder::new(File::open(file.path())?, Compression::best());
+                        // io::copy(&mut src, &mut dst)?;
+                        // Ok(())
+                        // })
                     } else if matches!(extension, "h" | "c" | "cc")
                         && src_path.join("../../common").exists()
                     {
