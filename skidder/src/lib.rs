@@ -111,7 +111,7 @@ impl Repo {
 
     pub fn read_metadata(&self, config: &Config, grammar: &str) -> Result<Metadata> {
         let path = self.dir(config).join(grammar).join("metadata.json");
-        Metadata::read(&path)
+        Metadata::read(&path).with_context(|| format!("failed to read metadata for {grammar}"))
     }
 
     pub fn list_grammars(&self, config: &Config) -> Result<Vec<PathBuf>> {
@@ -153,9 +153,17 @@ impl Repo {
         let _ = fs::create_dir_all(&dir);
         ensure!(dir.exists(), "failed to create directory {}", dir.display());
         // intentionally not doing a shallow clone since that makes
-        // incremental updates more exensive
+        // incremental updates more exensive, however partial clones are a great
+        // fit since that avoids fetching old parsers (which are not very useful)
         config.git(
-            &["clone", "--single-branch", "--branch", branch, remote],
+            &[
+                "clone",
+                "--single-branch",
+                "--filter=blob:none",
+                "--branch",
+                branch,
+                remote,
+            ],
             &dir,
         )
     }
@@ -187,6 +195,8 @@ pub fn list_grammars(config: &Config) -> Result<Vec<PathBuf>> {
     for repo in &config.repos {
         res.append(&mut repo.list_grammars(config)?)
     }
+    res.sort_by(|path1, path2| path1.file_name().cmp(&path2.file_name()));
+    res.dedup_by(|path1, path2| path1.file_name() == path2.file_name());
     Ok(res)
 }
 
@@ -245,6 +255,8 @@ pub struct Metadata {
     /// where later matches take priority.
     #[serde(default)]
     pub new_prescedence: bool,
+    #[serde(default)]
+    pub compressed: bool,
 }
 
 impl Metadata {

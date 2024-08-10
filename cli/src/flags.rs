@@ -25,7 +25,9 @@ xflags::xflags! {
             required repo: PathBuf
             optional grammar: String
         }
-
+        cmd init-repo {
+            required repo: PathBuf
+        }
     }
 }
 // generated start
@@ -40,6 +42,7 @@ pub struct Skidder {
 pub enum SkidderCmd {
     Import(Import),
     Build(Build),
+    InitRepo(InitRepo),
 }
 
 #[derive(Debug)]
@@ -59,6 +62,11 @@ pub struct Build {
     pub verbose: bool,
     pub threads: Option<usize>,
     pub force: bool,
+}
+
+#[derive(Debug)]
+pub struct InitRepo {
+    pub repo: PathBuf,
 }
 
 impl Skidder {

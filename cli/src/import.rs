@@ -1,10 +1,13 @@
 use std::env::current_dir;
+use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
 
 use anyhow::{bail, Context, Result};
+use flate2::read::DeflateEncoder;
+use flate2::Compression;
 use serde::Deserialize;
 use skidder::Metadata;
 use walkdir::WalkDir;
@@ -44,7 +47,7 @@ impl Import {
                 None => dir_name,
             };
             src_path.push("src");
-            let dst_path = repo.join(grammar_name);
+            let mut dst_path = repo.join(grammar_name);
             fs::create_dir_all(&dst_path)
                 .with_context(|| format!("failed to create {}", dst_path.display()))?;
             if !src_path.join("parser.c").exists() {
@@ -54,37 +57,65 @@ impl Import {
                 );
                 continue;
             }
-            println!("importing {grammar_name}");
-            for file in WalkDir::new(&src_path) {
-                let file = file?;
-                if !file.file_type().is_file() {
-                    continue;
-                }
-                let Some(file_name) = file.file_name().to_str() else {
-                    continue;
-                };
-                let Some((_, extension)) = file_name.rsplit_once('.') else {
-                    continue;
-                };
-                if !(matches!(extension, "h" | "c" | "cc")
-                    || extension == "scm" && self.import_queries)
-                {
-                    continue;
-                }
-                let relative_path = file.path().strip_prefix(&src_path).unwrap();
-                let dst_path = dst_path.join(relative_path);
-                fs::create_dir_all(dst_path.parent().unwrap()).with_context(|| {
-                    format!("failed to create {}", dst_path.parent().unwrap().display())
-                })?;
-                fs::copy(file.path(), &dst_path).with_context(|| {
-                    format!(
-                        "failed to copy {} to {}",
-                        src_path.display(),
-                        dst_path.display()
-                    )
-                })?;
-            }
             src_path.pop();
+            println!("importing {grammar_name}");
+            for dir in ["src", "../common"] {
+                let src_path = src_path.join(dir);
+                if !src_path.exists() {
+                    continue;
+                }
+                dst_path.push(dir.strip_prefix("../").unwrap_or(dir));
+                for file in WalkDir::new(&src_path) {
+                    let file = file?;
+                    if !file.file_type().is_file() {
+                        continue;
+                    }
+                    let Some(file_name) = file.file_name().to_str() else {
+                        continue;
+                    };
+                    let Some((_, extension)) = file_name.rsplit_once('.') else {
+                        continue;
+                    };
+                    if !(matches!(extension, "h" | "c" | "cc")
+                        || extension == "scm" && self.import_queries)
+                    {
+                        continue;
+                    }
+                    let relative_path = file.path().strip_prefix(&src_path).unwrap();
+                    let dst_path = dst_path.join(relative_path);
+                    fs::create_dir_all(dst_path.parent().unwrap()).with_context(|| {
+                        format!("failed to create {}", dst_path.parent().unwrap().display())
+                    })?;
+                    let res = if file_name == "parser.c"
+                        && file.path().parent() == Some(&src_path)
+                        && dir == "src"
+                    {
+                        File::create(&dst_path).and_then(|mut dst| {
+                            let mut src =
+                                DeflateEncoder::new(File::open(file.path())?, Compression::best());
+                            io::copy(&mut src, &mut dst)?;
+                            Ok(())
+                        })
+                    } else if matches!(extension, "h" | "c" | "cc")
+                        && src_path.join("../../common").exists()
+                    {
+                        fs::read_to_string(file.path()).and_then(|contents| {
+                            let contents = contents.replace("../../common/", "../common/");
+                            fs::write(&dst_path, contents)
+                        })
+                    } else {
+                        fs::copy(file.path(), &dst_path).map(|_| ())
+                    };
+                    res.with_context(|| {
+                        format!(
+                            "failed to copy {} to {}",
+                            file.path().display(),
+                            dst_path.display()
+                        )
+                    })?;
+                }
+                dst_path.pop();
+            }
             let license_file = LICENSE_FILE_NAMES
                 .iter()
                 .map(|name| src_path.join(name))
@@ -160,6 +191,7 @@ impl Import {
                     license: license.unwrap_or_default(),
                     new_prescedence: old_metadata
                         .map_or(false, |old_metadata| old_metadata.new_prescedence),
+                    compressed: true,
                 };
                 metadata.write(&metadata_path).with_context(|| {
                     format!(
