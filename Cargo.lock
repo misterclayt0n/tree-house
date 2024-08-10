@@ -435,6 +435,7 @@ name = "skidder-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "libloading",
  "serde",
  "serde_json",
  "skidder",

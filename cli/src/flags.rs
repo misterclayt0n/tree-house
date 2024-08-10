@@ -1,4 +1,3 @@
-use std::ffi::OsString;
 use std::path::PathBuf;
 
 xflags::xflags! {
@@ -28,6 +27,10 @@ xflags::xflags! {
         cmd init-repo {
             required repo: PathBuf
         }
+        cmd load-grammar {
+            optional -r, --recursive
+            required path: PathBuf
+        }
     }
 }
 // generated start
@@ -43,6 +46,7 @@ pub enum SkidderCmd {
     Import(Import),
     Build(Build),
     InitRepo(InitRepo),
+    LoadGrammar(LoadGrammar),
 }
 
 #[derive(Debug)]
@@ -67,6 +71,13 @@ pub struct Build {
 #[derive(Debug)]
 pub struct InitRepo {
     pub repo: PathBuf,
+}
+
+#[derive(Debug)]
+pub struct LoadGrammar {
+    pub path: PathBuf,
+
+    pub recursive: bool,
 }
 
 impl Skidder {

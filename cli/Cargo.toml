@@ -17,4 +17,5 @@ walkdir = "2.5.0"
 xflags = "0.3.2"
 
 skidder = { path = "../skidder" }
+libloading = "0.8.5"
 
