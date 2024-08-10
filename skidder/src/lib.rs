@@ -152,6 +152,12 @@ impl Repo {
         }
         let _ = fs::create_dir_all(&dir);
         ensure!(dir.exists(), "failed to create directory {}", dir.display());
+        let Some(dir_str) = dir.as_os_str().to_str() else {
+            bail!(
+                "could not convert the directory name to a string: {}",
+                dir.display()
+            )
+        };
         // intentionally not doing a shallow clone since that makes
         // incremental updates more exensive, however partial clones are a great
         // fit since that avoids fetching old parsers (which are not very useful)
@@ -163,6 +169,7 @@ impl Repo {
                 "--branch",
                 branch,
                 remote,
+                &dir_str,
             ],
             &dir,
         )
