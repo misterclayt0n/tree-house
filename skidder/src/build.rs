@@ -23,8 +23,8 @@ fn is_fresh(grammar_dir: &Path, files: &[&str], force: bool) -> Result<(Checksum
         }
         hasher.update(file.as_bytes());
         hasher.update([0, 0, 0, 0]);
-        fs::File::open(&path)
-            .and_then(|mut file| std::io::copy(&mut file, &mut hasher))
+        File::open(&path)
+            .and_then(|mut file| io::copy(&mut file, &mut hasher))
             .with_context(|| format!("failed to read {}", path.display()))?;
         hasher.update([0, 0, 0, 0]);
     }
