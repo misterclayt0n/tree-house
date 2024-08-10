@@ -189,8 +189,8 @@ impl Import {
                     repo,
                     rev,
                     license: license.unwrap_or_default(),
-                    new_prescedence: old_metadata
-                        .map_or(false, |old_metadata| old_metadata.new_prescedence),
+                    new_precedence: old_metadata
+                        .map_or(false, |old_metadata| old_metadata.new_precedence),
                     compressed: true,
                 };
                 metadata.write(&metadata_path).with_context(|| {

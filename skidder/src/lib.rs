@@ -254,7 +254,7 @@ pub struct Metadata {
     /// Wether to use the new query precedence
     /// where later matches take priority.
     #[serde(default)]
-    pub new_prescedence: bool,
+    pub new_precedence: bool,
     #[serde(default)]
     pub compressed: bool,
 }
