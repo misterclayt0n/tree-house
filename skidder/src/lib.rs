@@ -155,9 +155,25 @@ impl Repo {
             }
             if switch_branch {
                 config.git(&["reset", "--hard"], &dir)?;
-                config.git(&["checkout", branch], &dir)?;
+                // Cloning with `--single-branch` sets the `remote.origin.fetch`
+                // spec to only fetch the desired branch. Switch this branch to
+                // the new desired branch.
+                config.git(
+                    &[
+                        "config",
+                        "remote.origin.fetch",
+                        &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"),
+                    ],
+                    &dir,
+                )?;
             }
             config.git(&["fetch", "origin", branch], &dir)?;
+            if switch_branch {
+                // Note that `git switch <branch>` exists but is marked as experimental
+                // at time of writing. `git checkout <existing branch>` is the tried and
+                // true alternative.
+                config.git(&["checkout", branch], &dir)?;
+            }
             config.git(&["reset", "--hard", &format!("origin/{}", branch)], &dir)?;
             return Ok(());
         }
