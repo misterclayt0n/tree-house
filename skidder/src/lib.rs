@@ -26,6 +26,34 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn compiled_parser_path(&self, grammar: &str) -> Option<PathBuf> {
+        use std::borrow::Cow;
+
+        let (repo, metadata) = self.repos.iter().find_map(|repo| {
+            let metadata = repo.read_metadata(self, grammar).ok()?;
+            Some((repo, metadata))
+        })?;
+
+        let grammar = match metadata {
+            Metadata::ReuseParser { name } => Cow::Owned(name),
+            Metadata::ParserDefinition { .. } => Cow::Borrowed(grammar),
+        };
+
+        let parser = repo
+            .dir(self)
+            .join(&*grammar)
+            .join(&*grammar)
+            .with_extension(LIB_EXTENSION);
+        parser.exists().then_some(parser)
+    }
+
+    pub fn grammar_dir(&self, grammar: &str) -> Option<PathBuf> {
+        self.repos.iter().find_map(|repo| {
+            repo.has_grammar(self, grammar)
+                .then(|| repo.dir(self).join(grammar))
+        })
+    }
+
     fn git(&self, args: &[&str], dir: &Path) -> Result<()> {
         let mut cmd = Command::new("git");
         cmd.args(args).current_dir(dir);
@@ -106,16 +134,6 @@ impl Repo {
         }
     }
 
-    pub fn compiled_parser_path(&self, config: &Config, grammar: &str) -> PathBuf {
-        self.grammar_dir(config, grammar)
-            .join(grammar)
-            .with_extension(LIB_EXTENSION)
-    }
-
-    pub fn grammar_dir(&self, config: &Config, grammar: &str) -> PathBuf {
-        self.dir(config).join(grammar)
-    }
-
     pub fn has_grammar(&self, config: &Config, grammar: &str) -> bool {
         self.dir(config)
             .join(grammar)
@@ -130,17 +148,21 @@ impl Repo {
 
     pub fn list_grammars(&self, config: &Config) -> Result<Vec<PathBuf>> {
         fs::read_dir(self.dir(config))
-            .context("failed to acces repository")?
+            .context("failed to access repository")?
             .map(|dent| {
                 let dent = dent?;
                 if !dent.file_type()?.is_dir() || dent.file_name().to_str().is_none() {
                     return Ok(None);
                 }
                 let path = dent.path();
-                if !path.join("metadata.json").exists() {
+                let metadata_file = path.join("metadata.json");
+                if !metadata_file.exists() {
                     return Ok(None);
                 }
-                Ok(Some(dent.path()))
+                let metadata = Metadata::read(&metadata_file).with_context(|| {
+                    format!("failed to read metadata file {}", metadata_file.display())
+                })?;
+                Ok(metadata.parser_definition().map(|_| dent.path()))
             })
             .filter_map(|res| res.transpose())
             .collect()
