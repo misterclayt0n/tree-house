@@ -1,4 +1,5 @@
-use std::io::Write;
+use std::fs::File;
+use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -9,6 +10,9 @@ use std::{fs, io, thread};
 
 use anyhow::{bail, ensure, Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
+use ruzstd::frame::ReadFrameHeaderError;
+use ruzstd::frame_decoder::FrameDecoderError;
+use ruzstd::{BlockDecodingStrategy, FrameDecoder};
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(windows))]
@@ -147,10 +151,12 @@ impl Repo {
     }
 
     pub fn list_grammars(&self, config: &Config) -> Result<Vec<PathBuf>> {
-        fs::read_dir(self.dir(config))
-            .context("failed to access repository")?
+        let dir = self.dir(config);
+        fs::read_dir(&dir)
+            .with_context(|| format!("failed to access repository {}", dir.display()))?
             .map(|dent| {
-                let dent = dent?;
+                let dent =
+                    dent.with_context(|| format!("failed to access repository {}", dir.display()))?;
                 if !dent.file_type()?.is_dir() || dent.file_name().to_str().is_none() {
                     return Ok(None);
                 }
@@ -345,4 +351,45 @@ pub struct ParserDefinition {
     /// Wether the `parser.c` file is compressed
     #[serde(default)]
     pub compressed: bool,
+}
+
+// ruzstd is a bit manual if they provided a better Reader implementation this
+// owuldn't be necessary... they don't do that because using zstd effeciently
+// apparently requires a seekable reader. Most readers are seekable so just
+// adding an extra trait bount would help... oh well
+
+/// decompresses a file compressed by skidder
+pub fn decompress(src: &mut File, mut dst: impl Write) -> Result<()> {
+    const BATCH_SIZE: usize = 8 * 1024;
+    let size = src.metadata()?.len();
+
+    let mut src = BufReader::new(src);
+    let mut decoder = FrameDecoder::new();
+    let mut copy_buffer = [0; BATCH_SIZE];
+
+    while src.stream_position()? < size {
+        match decoder.reset(&mut src) {
+            Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame {
+                length: skip_size,
+                ..
+            })) => {
+                src.seek(SeekFrom::Current(skip_size as i64)).unwrap();
+                continue;
+            }
+            other => other?,
+        }
+        while !decoder.is_finished() {
+            decoder.decode_blocks(&mut src, BlockDecodingStrategy::UptoBytes(BATCH_SIZE))?;
+            while decoder.can_collect() > BATCH_SIZE {
+                let read = decoder.read(&mut copy_buffer).unwrap();
+                assert_eq!(read, BATCH_SIZE);
+                dst.write_all(&copy_buffer)?;
+            }
+        }
+        while decoder.can_collect() != 0 {
+            let read = decoder.read(&mut copy_buffer).unwrap();
+            dst.write_all(&copy_buffer[..read])?;
+        }
+    }
+    Ok(())
 }

@@ -1,18 +1,15 @@
 use std::fs::{self, File};
-use std::io::{self, BufReader, Read, Seek, SeekFrom, Write};
+use std::io;
 use std::path::Path;
 use std::process::Command;
 use std::sync::OnceLock;
 
 use anyhow::{bail, ensure, Context, Result};
-use ruzstd::frame::ReadFrameHeaderError;
-use ruzstd::frame_decoder::FrameDecoderError;
-use ruzstd::{BlockDecodingStrategy, FrameDecoder};
 use sha1::{Digest, Sha1};
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
-use crate::{Metadata, LIB_EXTENSION};
+use crate::{decompress, Metadata, LIB_EXTENSION};
 
 type Checksum = [u8; 20];
 fn is_fresh(grammar_dir: &Path, force: bool) -> Result<(Checksum, bool)> {
@@ -159,7 +156,6 @@ pub fn build_grammar(grammar_name: &str, grammar_dir: &Path, force: bool) -> Res
     let Some(parser_definition) = metadata.parser_definition() else {
         bail!("source directories with parser.c files must have parser definition metadata");
     };
-    assert!(parser_definition.compressed);
     if parser_definition.compressed {
         let decompressed_parser = build_dir.path().join(format!("{grammar_name}.c"));
         let mut dst = File::create(&decompressed_parser).with_context(|| {
@@ -170,7 +166,7 @@ pub fn build_grammar(grammar_name: &str, grammar_dir: &Path, force: bool) -> Res
         })?;
         File::open(&parser)
             .map_err(anyhow::Error::from)
-            .and_then(|mut reader| zstd_decode(&mut reader, &mut dst))
+            .and_then(|mut reader| decompress(&mut reader, &mut dst))
             .with_context(|| {
                 format!("failed to decompress parser {}", build_dir.path().display())
             })?;
@@ -222,44 +218,5 @@ pub fn build_grammar(grammar_name: &str, grammar_dir: &Path, force: bool) -> Res
     )
     .context("failed to create library")?;
     let _ = fs::write(grammar_dir.join(".BUILD_COOKIE"), hash);
-    Ok(())
-}
-
-/// ruzstd is a bit manual if they provided a better Reader implementation this
-/// owuldn't be necessary... they don't do that because using zstd effeciently
-/// apparently requires a seekable reader. Most readers are seekable so just
-/// adding an extra trait bount would help... oh well
-fn zstd_decode(src: &mut File, dst: &mut File) -> Result<()> {
-    const BATCH_SIZE: usize = 8 * 1024;
-    let size = src.metadata()?.len();
-
-    let mut src = BufReader::new(src);
-    let mut decoder = FrameDecoder::new();
-    let mut copy_buffer = [0; BATCH_SIZE];
-
-    while src.stream_position()? < size {
-        match decoder.reset(&mut src) {
-            Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame {
-                length: skip_size,
-                ..
-            })) => {
-                src.seek(SeekFrom::Current(skip_size as i64)).unwrap();
-                continue;
-            }
-            other => other?,
-        }
-        while !decoder.is_finished() {
-            decoder.decode_blocks(&mut src, BlockDecodingStrategy::UptoBytes(BATCH_SIZE))?;
-            while decoder.can_collect() > BATCH_SIZE {
-                let read = decoder.read(&mut copy_buffer).unwrap();
-                assert_eq!(read, BATCH_SIZE);
-                dst.write_all(&copy_buffer)?;
-            }
-        }
-        while decoder.can_collect() != 0 {
-            let read = decoder.read(&mut copy_buffer).unwrap();
-            dst.write_all(&copy_buffer[..read])?;
-        }
-    }
     Ok(())
 }

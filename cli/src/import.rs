@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
 use skidder::{Metadata, ParserDefinition};
 use walkdir::WalkDir;
@@ -74,7 +74,9 @@ impl Import {
                         continue;
                     };
                     if !(matches!(extension, "h" | "c" | "cc")
-                        || extension == "scm" && self.import_queries)
+                        || extension == "scm" && self.import_queries
+                        || file_name == "grammar.json")
+                        || file_name.starts_with("parser_abi") && extension == "c"
                     {
                         continue;
                     }
@@ -83,24 +85,12 @@ impl Import {
                     fs::create_dir_all(dst_path.parent().unwrap()).with_context(|| {
                         format!("failed to create {}", dst_path.parent().unwrap().display())
                     })?;
-                    let res = if file_name == "parser.c"
+                    let res = if matches!(file_name, "parser.c" | "grammar.json")
                         && file.path().parent() == Some(&src_path)
                         && dir == "src"
                     {
-                        // File::create(&dst_path).and_then(|mut dst| {
-                        Command::new("zstd")
-                            .args(["--ultra", "-22", "-f", "-o"])
-                            .arg(&dst_path)
-                            .arg(file.path())
-                            .status()
-                            .map(|res| {
-                                assert!(res.success());
-                            })
-                        // let mut src =
-                        //     DeflateEncoder::new(File::open(file.path())?, Compression::best());
-                        // io::copy(&mut src, &mut dst)?;
-                        // Ok(())
-                        // })
+                        import_compressed(file.path(), &dst_path)?;
+                        continue;
                     } else if matches!(extension, "h" | "c" | "cc")
                         && src_path.join("../../common").exists()
                     {
@@ -229,4 +219,16 @@ fn git_output(args: &[&str], dir: &Path, verbose: bool) -> Result<String> {
         bail!("git returned non-zero exit-code: {}", res.status);
     }
     String::from_utf8(res.stdout).context("git returned invalid utf8")
+}
+
+pub fn import_compressed(src: &Path, dst: &Path) -> anyhow::Result<()> {
+    let success = Command::new("zstd")
+        .args(["--ultra", "-22", "-f", "-o"])
+        .arg(dst)
+        .arg(src)
+        .status()
+        .with_context(|| format!("failed to compress {}", src.display()))?
+        .success();
+    ensure!(success, "failed to compress {}", src.display());
+    Ok(())
 }

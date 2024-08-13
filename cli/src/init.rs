@@ -8,7 +8,10 @@ use crate::flags::InitRepo;
 impl InitRepo {
     pub fn run(self) -> anyhow::Result<()> {
         append(&self.repo.join(".gitignore"), "*/*.so\n*/.BUILD_COOKIE\n")?;
-        append(&self.repo.join(".gitattributes"), "*/src/parser.c binary\n")?;
+        append(
+            &self.repo.join(".gitattributes"),
+            "*/src/parser.c binary\n*/src/grammar.json binary\n",
+        )?;
         Ok(())
     }
 }

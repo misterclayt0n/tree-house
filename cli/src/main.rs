@@ -1,18 +1,26 @@
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::exit;
+
+use ::skidder::list_grammars;
+use anyhow::{Context, Result};
+use skidder::Metadata;
 
 mod build;
 mod flags;
+mod genrate_parser;
 mod import;
 mod init;
 mod load;
 
-fn wrapped_main() -> anyhow::Result<()> {
+fn wrapped_main() -> Result<()> {
     let flags = flags::Skidder::from_env_or_exit();
     match flags.subcommand {
         flags::SkidderCmd::Import(import_cmd) => import_cmd.run(),
         flags::SkidderCmd::Build(build_cmd) => build_cmd.run(),
         flags::SkidderCmd::InitRepo(init_cmd) => init_cmd.run(),
         flags::SkidderCmd::LoadGrammar(load_cmd) => load_cmd.run(),
+        flags::SkidderCmd::RegenerateParser(generate_cmd) => generate_cmd.run(),
     }
 }
 
@@ -23,4 +31,15 @@ pub fn main() {
         }
         exit(1)
     }
+}
+
+fn collect_grammars(repo: &Path) -> Result<Vec<PathBuf>> {
+    let config = skidder::Config {
+        repos: vec![skidder::Repo::Local {
+            path: repo.to_owned(),
+        }],
+        index: PathBuf::new(),
+        verbose: false,
+    };
+    list_grammars(&config)
 }

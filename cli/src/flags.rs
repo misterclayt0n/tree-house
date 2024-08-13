@@ -31,6 +31,10 @@ xflags::xflags! {
             optional -r, --recursive
             required path: PathBuf
         }
+        cmd regenerate-parser {
+            optional -r, --recursive
+            required path: PathBuf
+        }
     }
 }
 // generated start
@@ -47,6 +51,7 @@ pub enum SkidderCmd {
     Build(Build),
     InitRepo(InitRepo),
     LoadGrammar(LoadGrammar),
+    RegenerateParser(RegenerateParser),
 }
 
 #[derive(Debug)]
@@ -75,6 +80,13 @@ pub struct InitRepo {
 
 #[derive(Debug)]
 pub struct LoadGrammar {
+    pub path: PathBuf,
+
+    pub recursive: bool,
+}
+
+#[derive(Debug)]
+pub struct RegenerateParser {
     pub path: PathBuf,
 
     pub recursive: bool,

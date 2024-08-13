@@ -5,26 +5,13 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use libloading::Symbol;
 
+use crate::collect_grammars;
 use crate::flags::LoadGrammar;
 
 impl LoadGrammar {
     pub fn run(self) -> Result<()> {
         let paths = if self.recursive {
-            fs::read_dir(&self.path)?
-                .filter_map(|dent| {
-                    let dent = match dent {
-                        Ok(dent) => dent,
-                        Err(err) => return Some(Err(err.into())),
-                    };
-                    if !dent.file_type().is_ok_and(|file| file.is_dir()) {
-                        return None;
-                    }
-                    // this is an internal tool I dont' care about windows
-                    let path = dent.path().join(dent.file_name()).with_extension("so");
-                    path.exists().then_some(Ok(path))
-                })
-                .collect::<Result<Vec<PathBuf>>>()
-                .with_context(|| format!("failed to read directory {}", self.path.display()))?
+            collect_grammars(&self.path)?
         } else {
             vec![self.path.clone()]
         };
