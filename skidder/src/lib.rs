@@ -272,25 +272,26 @@ pub fn build_all_grammars(
     Ok(grammars.len())
 }
 
+// TODO: version the metadata? Or allow unknown fields but warn on them?
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct Metadata {
-    /// The git remote of the query upstreama
-    pub repo: String,
-    /// The git remote of the query
-    pub rev: String,
-    /// The SPDX license identifier
-    #[serde(default)]
-    pub license: String,
-    /// Wether to use the new query precedence
-    /// where later matches take priority.
-    #[serde(default)]
-    pub new_precedence: bool,
-    #[serde(default)]
-    pub compressed: bool,
+#[serde(rename_all = "kebab-case", untagged)]
+pub enum Metadata {
+    ParserDefinition(ParserDefinition),
+    ReuseParser {
+        /// The name of the grammar to reuse.
+        /// Grammars should only be reused from the same `Repo`.
+        #[serde(rename = "reuse-parser")]
+        name: String,
+    },
 }
 
 impl Metadata {
+    pub fn parser_definition(self) -> Option<ParserDefinition> {
+        match self {
+            Self::ParserDefinition(parser_definition) => Some(parser_definition),
+            Self::ReuseParser { .. } => None,
+        }
+    }
     pub fn read(path: &Path) -> Result<Metadata> {
         let json = fs::read_to_string(path)
             .with_context(|| format!("couldn't read {}", path.display()))?;
@@ -301,4 +302,23 @@ impl Metadata {
         let json = serde_json::to_string_pretty(&self).unwrap();
         fs::write(path, json).with_context(|| format!("failed to write {}", path.display()))
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct ParserDefinition {
+    /// The git remote of the upstream grammar repository
+    pub repo: String,
+    /// The revision of the git remote when the files were imported
+    pub rev: String,
+    /// The SPDX license identifier of the upstream grammar repository
+    #[serde(default)]
+    pub license: String,
+    /// Wether to use the new query precedence
+    /// where later matches take priority.
+    #[serde(default)]
+    pub new_precedence: bool,
+    /// Wether the `parser.c` file is compressed
+    #[serde(default)]
+    pub compressed: bool,
 }

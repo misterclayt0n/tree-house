@@ -6,7 +6,7 @@ use std::{fs, io};
 
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
-use skidder::Metadata;
+use skidder::{Metadata, ParserDefinition};
 use walkdir::WalkDir;
 
 use crate::flags::Import;
@@ -165,6 +165,7 @@ impl Import {
 
                 let old_metadata = Metadata::read(&metadata_path)
                     .ok()
+                    .and_then(Metadata::parser_definition)
                     .filter(|old_meta| old_meta.repo == repo && !old_meta.license.is_empty());
 
                 if let Some(old_metadata) = &old_metadata {
@@ -190,14 +191,14 @@ impl Import {
                     eprintln!("warning: couldn't import determine license for {grammar_name}",);
                 }
 
-                let metadata = Metadata {
+                let metadata = Metadata::ParserDefinition(ParserDefinition {
                     repo,
                     rev,
                     license: license.unwrap_or_default(),
                     new_precedence: old_metadata
                         .map_or(false, |old_metadata| old_metadata.new_precedence),
                     compressed: true,
-                };
+                });
                 metadata.write(&metadata_path).with_context(|| {
                     format!(
                         "failed to write metadata.json to {}",

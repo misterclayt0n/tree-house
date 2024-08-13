@@ -156,8 +156,11 @@ pub fn build_grammar(grammar_name: &str, grammar_dir: &Path, force: bool) -> Res
     let build_dir = TempDir::new().context("failed to create temporary build directory")?;
     let metadata = Metadata::read(&grammar_dir.join("metadata.json"))
         .with_context(|| format!("failed to read metadata for {grammar_name}"))?;
-    assert!(metadata.compressed);
-    if metadata.compressed {
+    let Some(parser_definition) = metadata.parser_definition() else {
+        bail!("source directories with parser.c files must have parser definition metadata");
+    };
+    assert!(parser_definition.compressed);
+    if parser_definition.compressed {
         let decompressed_parser = build_dir.path().join(format!("{grammar_name}.c"));
         let mut dst = File::create(&decompressed_parser).with_context(|| {
             format!(
