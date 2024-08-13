@@ -26,7 +26,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn git(&self, args: &[&str], dir: &Path) -> Result<()> {
+    fn git(&self, args: &[&str], dir: &Path) -> Result<()> {
         let mut cmd = Command::new("git");
         cmd.args(args).current_dir(dir);
         if self.verbose {
@@ -48,7 +48,9 @@ impl Config {
         Ok(())
     }
 
-    pub fn git_exit_with(&self, args: &[&str], dir: &Path, exitcode: i32) -> Result<bool> {
+    // TODO: remove?
+    #[allow(dead_code)]
+    fn git_exit_with(&self, args: &[&str], dir: &Path, exitcode: i32) -> Result<bool> {
         let mut cmd = Command::new("git");
         cmd.args(args).current_dir(dir);
         if self.verbose {
@@ -68,7 +70,7 @@ impl Config {
         Ok(false)
     }
 
-    pub fn git_output(&self, args: &[&str], dir: &Path) -> Result<String> {
+    fn git_output(&self, args: &[&str], dir: &Path) -> Result<String> {
         let mut cmd = Command::new("git");
         cmd.args(args).current_dir(dir);
         if self.verbose {
