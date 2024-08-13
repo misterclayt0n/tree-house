@@ -18,6 +18,7 @@ const LIB_EXTENSION: &str = "dll";
 
 mod build;
 
+#[derive(Debug)]
 pub struct Config {
     pub repos: Vec<Repo>,
     pub index: PathBuf,
@@ -83,6 +84,7 @@ impl Config {
     }
 }
 
+#[derive(Debug)]
 pub enum Repo {
     Git {
         name: String,
