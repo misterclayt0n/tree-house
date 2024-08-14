@@ -212,11 +212,15 @@ pub fn build_grammar(grammar_name: &str, grammar_dir: &Path, force: bool) -> Res
             );
         }
     }
-    fs::copy(
-        build_dir.path().join(lib_name),
-        grammar_dir.join(grammar_name).with_extension(LIB_EXTENSION),
-    )
-    .context("failed to create library")?;
+    let from = build_dir.path().join(lib_name);
+    let to = grammar_dir.join(grammar_name).with_extension(LIB_EXTENSION);
+    fs::copy(&from, &to).with_context(|| {
+        format!(
+            "failed to copy compiled library from {} to {}",
+            from.display(),
+            to.display()
+        )
+    })?;
     let _ = fs::write(grammar_dir.join(".BUILD_COOKIE"), hash);
     Ok(())
 }
