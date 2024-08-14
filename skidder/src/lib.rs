@@ -118,7 +118,7 @@ impl Config {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Repo {
     Git {
         name: String,
