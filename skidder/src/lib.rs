@@ -131,7 +131,7 @@ pub enum Repo {
 }
 
 impl Repo {
-    fn dir(&self, config: &Config) -> PathBuf {
+    pub fn dir(&self, config: &Config) -> PathBuf {
         match self {
             Repo::Git { name, .. } => config.index.join(name),
             Repo::Local { path } => path.clone(),
