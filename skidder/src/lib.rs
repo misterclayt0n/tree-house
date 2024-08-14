@@ -152,6 +152,9 @@ impl Repo {
 
     pub fn list_grammars(&self, config: &Config) -> Result<Vec<PathBuf>> {
         let dir = self.dir(config);
+        if !dir.exists() {
+            return Ok(vec![]);
+        }
         fs::read_dir(&dir)
             .with_context(|| format!("failed to access repository {}", dir.display()))?
             .map(|dent| {
