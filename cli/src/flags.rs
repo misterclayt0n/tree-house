@@ -9,10 +9,10 @@ xflags::xflags! {
             optional --import-queries
             /// Wether to (re)generate metadata
             optional --metadata
-            /// The repository/diretocy where repos are copied into
+            /// The repository/diretocy where repos are copied into.
             /// Defaults to the current working directory
             optional -r,--repo repo: PathBuf
-            /// the path of the grammars to import the name of the directory
+            /// The path of the grammars to import. The name of the directory
             /// will be used as the grammar name. To overwrite you can append
             /// the grammar name with a colon
             repeated path: PathBuf
