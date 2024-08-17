@@ -218,7 +218,9 @@ fn git_output(args: &[&str], dir: &Path, verbose: bool) -> Result<String> {
         let _ = io::stderr().write_all(&res.stderr);
         bail!("git returned non-zero exit-code: {}", res.status);
     }
-    String::from_utf8(res.stdout).context("git returned invalid utf8")
+    String::from_utf8(res.stdout)
+        .context("git returned invalid utf8")
+        .map(|output| output.trim_end().to_string())
 }
 
 pub fn import_compressed(src: &Path, dst: &Path) -> anyhow::Result<()> {
