@@ -10,7 +10,7 @@ use skidder::{Metadata, ParserDefinition};
 use walkdir::WalkDir;
 
 use crate::flags::Import;
-const LICENSE_FILE_NAMES: &[&str] = &["LICENSE", "LICENSE.txt", "LICENCE", "LICENCE"];
+const LICENSE_FILE_NAMES: &[&str] = &["LICENSE", "LICENSE.txt", "LICENCE", "LICENCE", "COPYING"];
 const LICENSE_SEARCH: &[(&str, &str)] = &[
     ("unlicense", "unlicense"),
     ("EUROPEAN UNION PUBLIC LICENCE v. 1.2", "EUPL-1.2"),
@@ -19,6 +19,7 @@ const LICENSE_SEARCH: &[(&str, &str)] = &[
     ("GNU GENERAL PUBLIC LICENSE", "GPL-3.0"),
     ("MIT License", "MIT"),
     ("DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE", "WTFPL"),
+    ("BSD 3-Clause License", "BSD-3-Clause"),
 ];
 
 impl Import {
