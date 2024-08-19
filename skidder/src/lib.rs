@@ -30,25 +30,23 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn compiled_parser_path(&self, grammar: &str) -> Option<PathBuf> {
-        use std::borrow::Cow;
-
+    pub fn compiled_parser_path(&self, grammar: &str) -> Option<(String, PathBuf)> {
         let (repo, metadata) = self.repos.iter().find_map(|repo| {
             let metadata = repo.read_metadata(self, grammar).ok()?;
             Some((repo, metadata))
         })?;
 
         let grammar = match metadata {
-            Metadata::ReuseParser { name } => Cow::Owned(name),
-            Metadata::ParserDefinition { .. } => Cow::Borrowed(grammar),
+            Metadata::ReuseParser { name } => name,
+            Metadata::ParserDefinition { .. } => grammar.to_string(),
         };
 
         let parser = repo
             .dir(self)
-            .join(&*grammar)
-            .join(&*grammar)
+            .join(&grammar)
+            .join(&grammar)
             .with_extension(LIB_EXTENSION);
-        parser.exists().then_some(parser)
+        parser.exists().then_some((grammar, parser))
     }
 
     pub fn grammar_dir(&self, grammar: &str) -> Option<PathBuf> {
