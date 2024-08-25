@@ -3,7 +3,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use skidder::{decompress, Metadata};
 use tempfile::TempDir;
 
@@ -23,7 +23,7 @@ impl RegenerateParser {
         // create dummy file to prevent TS cli from creating a full sceleton
         File::create(temp_dir.path().join("grammar.js"))
             .context("failed to create temporary directory for decompression")?;
-        let mut failed = false;
+        let mut failed = Vec::new();
         for grammar_dir in paths {
             let grammar_name = grammar_dir.file_name().unwrap().to_str().unwrap();
             if grammar_name <= "dart" {
@@ -38,19 +38,25 @@ impl RegenerateParser {
                 .compressed;
 
             let src_path = grammar_dir.join("src");
+            let src_grammar_path = src_path.join("grammar.json");
             let grammar_path = temp_dir.path().join("grammar.json");
+            if !src_grammar_path.exists() {
+                eprintln!("grammar.json not found for {grammar_name}");
+                failed.push(grammar_name.to_owned());
+                continue;
+            }
             if compressed {
                 let dst = File::create(&grammar_path).with_context(|| {
                     format!(
-                        "failed to create grammr.json file in temporary build directory {}",
+                        "failed to create grammar.json file in temporary build directory {}",
                         temp_dir.path().display()
                     )
                 })?;
-                decompress_file(&src_path.join("grammar.json"), dst).with_context(|| {
+                decompress_file(&src_grammar_path, dst).with_context(|| {
                     format!("failed to decompress grammar.json for {grammar_name}")
                 })?;
             } else {
-                fs::copy(src_path.join("grammar.json"), &grammar_path)
+                fs::copy(src_grammar_path, &grammar_path)
                     .with_context(|| format!("failed to copy grammar.json for {grammar_name}"))?;
             }
             println!("running tree-sitter generate {}", grammar_path.display());
@@ -68,10 +74,12 @@ impl RegenerateParser {
                 })?
                 .success();
             if !res {
-                bail!(
+                eprintln!(
                     "failed to execute tree-sitter generate {}",
                     grammar_path.display()
-                )
+                );
+                failed.push(grammar_name.to_owned());
+                continue;
             }
 
             let new_parser_path = temp_dir.path().join("src").join("parser.c");
@@ -85,7 +93,7 @@ impl RegenerateParser {
             if old_parser.trim() == new_parser.trim() {
                 continue;
             }
-            failed = true;
+            failed.push(grammar_name.to_owned());
             eprintln!("existing parser.c was outdated updating...");
             if compressed {
                 import_compressed(&new_parser_path, &old_parser_path).with_context(|| {
@@ -96,7 +104,10 @@ impl RegenerateParser {
                     .with_context(|| format!("failed to opy new parser.c for {grammar_name}"))?;
             }
         }
-        ensure!(!failed, "one or more parser.c files is not up to date!");
+        ensure!(
+            !failed.is_empty(),
+            "parser.c files is not up to date for {failed:?}!"
+        );
         Ok(())
     }
 }
