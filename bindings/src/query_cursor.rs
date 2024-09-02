@@ -1,7 +1,7 @@
 use core::slice;
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
-use std::mem::replace;
+use std::mem;
 use std::ops::Range;
 use std::ptr::{self, NonNull};
 
@@ -22,7 +22,7 @@ unsafe fn with_cache<T>(f: impl FnOnce(&mut Vec<InactiveQueryCursor>) -> T) -> T
 
 pub struct QueryCursor<'a, 'tree, I: TsInput> {
     query: &'a Query,
-    ptr: *mut QueryCursorData,
+    ptr: NonNull<QueryCursorData>,
     tree: PhantomData<&'tree SyntaxTree>,
     input: I,
 }
@@ -36,7 +36,8 @@ impl<'tree, I: TsInput> QueryCursor<'_, 'tree, I> {
             captures: ptr::null(),
         };
         loop {
-            let success = unsafe { ts_query_cursor_next_match(self.ptr, &mut query_match) };
+            let success =
+                unsafe { ts_query_cursor_next_match(self.ptr.as_ptr(), &mut query_match) };
             if !success {
                 return None;
             }
@@ -56,7 +57,7 @@ impl<'tree, I: TsInput> QueryCursor<'_, 'tree, I> {
                     id: query_match.id,
                     pattern: Pattern(query_match.pattern_index as u32),
                     matched_nodes,
-                    query_cursor: unsafe { &mut *self.ptr },
+                    query_cursor: unsafe { self.ptr.as_mut() },
                     _tree: PhantomData,
                 };
                 return Some(res);
@@ -74,7 +75,7 @@ impl<'tree, I: TsInput> QueryCursor<'_, 'tree, I> {
         let mut capture_idx = 0;
         loop {
             let success = unsafe {
-                ts_query_cursor_next_capture(self.ptr, &mut query_match, &mut capture_idx)
+                ts_query_cursor_next_capture(self.ptr.as_ptr(), &mut query_match, &mut capture_idx)
             };
             if !success {
                 return None;
@@ -95,13 +96,13 @@ impl<'tree, I: TsInput> QueryCursor<'_, 'tree, I> {
                     id: query_match.id,
                     pattern: Pattern(query_match.pattern_index as u32),
                     matched_nodes,
-                    query_cursor: unsafe { &mut *self.ptr },
+                    query_cursor: unsafe { self.ptr.as_mut() },
                     _tree: PhantomData,
                 };
                 return Some((res, capture_idx));
             } else {
                 unsafe {
-                    ts_query_cursor_remove_match(self.ptr, query_match.id);
+                    ts_query_cursor_remove_match(self.ptr.as_ptr(), query_match.id);
                 }
             }
         }
@@ -109,25 +110,20 @@ impl<'tree, I: TsInput> QueryCursor<'_, 'tree, I> {
 
     pub fn set_byte_range(&mut self, range: Range<u32>) {
         unsafe {
-            ts_query_cursor_set_byte_range(self.ptr, range.start, range.end);
+            ts_query_cursor_set_byte_range(self.ptr.as_ptr(), range.start, range.end);
         }
     }
 
-    pub fn reuse(mut self) -> InactiveQueryCursor {
-        let ptr = replace(&mut self.ptr, ptr::null_mut());
-        InactiveQueryCursor {
-            ptr: unsafe { NonNull::new_unchecked(ptr) },
-        }
+    pub fn reuse(self) -> InactiveQueryCursor {
+        let res = InactiveQueryCursor { ptr: self.ptr };
+        mem::forget(self);
+        res
     }
 }
 
 impl<I: TsInput> Drop for QueryCursor<'_, '_, I> {
     fn drop(&mut self) {
-        // we allow moving the cursor data out so we need the null check here
-        // would be cleaner with a subtype but doesn't really matter at the end of the day
-        if let Some(ptr) = NonNull::new(self.ptr) {
-            unsafe { with_cache(|cache| cache.push(InactiveQueryCursor { ptr })) }
-        }
+        unsafe { with_cache(|cache| cache.push(InactiveQueryCursor { ptr: self.ptr })) }
     }
 }
 
@@ -171,9 +167,9 @@ impl InactiveQueryCursor {
         unsafe { ts_query_cursor_did_exceed_match_limit(self.ptr.as_ptr()) }
     }
 
-    pub fn set_byte_range(&mut self, range: Range<usize>) {
+    pub fn set_byte_range(&mut self, range: Range<u32>) {
         unsafe {
-            ts_query_cursor_set_byte_range(self.ptr.as_ptr(), range.start as u32, range.end as u32);
+            ts_query_cursor_set_byte_range(self.ptr.as_ptr(), range.start, range.end);
         }
     }
 
@@ -183,8 +179,9 @@ impl InactiveQueryCursor {
         node: &SyntaxTreeNode<'tree>,
         input: I,
     ) -> QueryCursor<'a, 'tree, I::TsInput> {
-        let ptr = self.ptr.as_ptr();
-        unsafe { ts_query_cursor_exec(self.ptr.as_ptr(), query.raw.as_ref(), node.as_raw()) };
+        let ptr = self.ptr;
+        unsafe { ts_query_cursor_exec(ptr.as_ptr(), query.raw.as_ref(), node.as_raw()) };
+        mem::forget(self);
         QueryCursor {
             query,
             ptr,

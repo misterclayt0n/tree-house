@@ -1,13 +1,13 @@
 use ::std::os::raw;
 use std::cell::Cell;
-use std::fmt;
 use std::marker::PhantomData;
+use std::{fmt, mem};
 
 use crate::syntax_tree_node::SyntaxTreeNodeRaw;
 use crate::{SyntaxTree, SyntaxTreeNode};
 
 thread_local! {
-    static CACHE: Cell<Option<TreeCursorRaw>> = const { Cell::new(None) };
+    static CACHE: Cell<Option<TreeCursorGuard>> = const { Cell::new(None) };
 }
 
 #[repr(C)]
@@ -18,9 +18,12 @@ struct TreeCursorRaw {
     context: [u32; 3usize],
 }
 
-impl Drop for TreeCursorRaw {
+#[repr(C)]
+struct TreeCursorGuard(TreeCursorRaw);
+
+impl Drop for TreeCursorGuard {
     fn drop(&mut self) {
-        unsafe { ts_tree_cursor_delete(self) }
+        unsafe { ts_tree_cursor_delete(&mut self.0) }
     }
 }
 
@@ -33,7 +36,9 @@ impl<'tree> TreeCursor<'tree> {
     pub fn new(node: &SyntaxTreeNode<'tree>) -> Self {
         Self {
             inner: match CACHE.take() {
-                Some(mut cursor) => unsafe {
+                Some(guard) => unsafe {
+                    let mut cursor = guard.0.clone();
+                    mem::forget(guard);
                     ts_tree_cursor_reset(&mut cursor, node.as_raw());
                     cursor
                 },
@@ -78,7 +83,7 @@ impl fmt::Debug for TreeCursorRaw {
 
 impl Drop for TreeCursor<'_> {
     fn drop(&mut self) {
-        CACHE.set(Some(self.inner.clone()))
+        CACHE.set(Some(TreeCursorGuard(self.inner.clone())))
     }
 }
 

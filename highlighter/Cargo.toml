@@ -17,6 +17,12 @@ regex = "1"
 regex-cursor = "0.1.4"
 slab = "0.4.9"
 
+[dev-dependencies]
+cov-mark = "2.0.0"
+expect-test = "1.5.0"
+indexmap = "2.5.0"
+skidder = { path = "../skidder" }
+
 [dependencies.tree-sitter]
 version = "0.1.0"
 package = "twig-sitter"

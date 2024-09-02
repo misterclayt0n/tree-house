@@ -34,13 +34,18 @@ impl<'a> TsInput for RopeTsInput<'a> {
     type Cursor = RopeyCursor<'a>;
     fn cursor_at(&mut self, offset: u32) -> &mut RopeyCursor<'a> {
         let offset = offset as usize;
+        debug_assert!(
+            offset <= self.src.len_bytes(),
+            "parser offset out of bounds: {offset} > {}",
+            self.src.len_bytes()
+        );
         // this cursor is optimized for contigous reads which are by far the most common during parsing
         // very far jumps (like injections at the other end of the document) are handelde
         // by starting a new cursor (new chunks iterator)
-        if offset < self.cursor.offset() || self.cursor.offset() - offset > 4906 {
+        if offset < self.cursor.offset() || offset - self.cursor.offset() > 4906 {
             self.cursor = regex_cursor::RopeyCursor::at(self.src, offset);
         } else {
-            while self.cursor.offset() + self.cursor.chunk().len() >= offset {
+            while self.cursor.offset() + self.cursor.chunk().len() <= offset {
                 if !self.cursor.advance() {
                     break;
                 }

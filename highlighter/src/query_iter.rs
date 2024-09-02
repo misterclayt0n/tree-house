@@ -1,14 +1,15 @@
 use core::slice;
 use std::iter::Peekable;
 use std::mem::replace;
+use std::ops::RangeBounds;
 
 use hashbrown::HashMap;
 use ropey::RopeSlice;
 
-use crate::{Injection, Layer, Range, Syntax};
-use tree_sitter::{Capture, InactiveQueryCursor, Query, QueryCursor, RopeTsInput, SyntaxTreeNode};
+use crate::{Injection, Language, Layer, Range, Syntax, TREE_SITTER_MATCH_LIMIT};
+use tree_sitter::{Capture, InactiveQueryCursor, Query, QueryCursor, RopeTsInput};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct MatchedNode {
     pub capture: Capture,
     pub byte_range: Range,
@@ -45,17 +46,22 @@ struct ActiveLayer<'a, S> {
 
 // data only needed when entering and exiting injections
 // seperate struck to keep the QueryIter reasonably small
-struct QueryIterLayerManager<'a, S> {
-    query: &'a Query,
-    node: SyntaxTreeNode<'a>,
+struct QueryIterLayerManager<'a, Loader, S> {
+    range: Range,
+    loader: Loader,
     src: RopeSlice<'a>,
     syntax: &'a Syntax,
     active_layers: HashMap<Layer, Box<ActiveLayer<'a, S>>>,
     active_injections: Vec<Injection>,
 }
 
-impl<'a, S: Default> QueryIterLayerManager<'a, S> {
+impl<'a, Loader, S> QueryIterLayerManager<'a, Loader, S>
+where
+    Loader: QueryLoader<'a>,
+    S: Default,
+{
     fn init_layer(&mut self, injection: Injection) -> Box<ActiveLayer<'a, S>> {
+        let node = self.syntax.layer(injection.layer).tree().root_node();
         self.active_layers
             .remove(&injection.layer)
             .unwrap_or_else(|| {
@@ -63,9 +69,12 @@ impl<'a, S: Default> QueryIterLayerManager<'a, S> {
                 let injection_start = layer
                     .injections
                     .partition_point(|child| child.range.start < injection.range.start);
+                let mut cursor = InactiveQueryCursor::new();
+                cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
+                cursor.set_byte_range(self.range.clone());
                 let cursor = InactiveQueryCursor::new().execute_query(
-                    self.query,
-                    &self.node,
+                    self.loader.get_query(layer.language),
+                    &node,
                     RopeTsInput::new(self.src),
                 );
                 Box::new(ActiveLayer {
@@ -80,32 +89,43 @@ impl<'a, S: Default> QueryIterLayerManager<'a, S> {
     }
 }
 
-pub struct QueryIter<'a, LayerState: Default = ()> {
-    layer_manager: Box<QueryIterLayerManager<'a, LayerState>>,
+pub struct QueryIter<'a, Loader: QueryLoader<'a>, LayerState: Default = ()> {
+    layer_manager: Box<QueryIterLayerManager<'a, Loader, LayerState>>,
     current_layer: Box<ActiveLayer<'a, LayerState>>,
     current_injection: Injection,
 }
 
-impl<'a, LayerState: Default> QueryIter<'a, LayerState> {
-    pub fn new(syntax: &'a Syntax, src: RopeSlice<'a>, query: &'a Query) -> Self {
-        Self::at(syntax, src, query, syntax.tree().root_node(), syntax.root)
-    }
-
-    pub fn at(
+impl<'a, Loader, LayerState> QueryIter<'a, Loader, LayerState>
+where
+    Loader: QueryLoader<'a>,
+    LayerState: Default,
+{
+    pub fn new(
         syntax: &'a Syntax,
         src: RopeSlice<'a>,
-        query: &'a Query,
-        node: SyntaxTreeNode<'a>,
-        layer: Layer,
+        loader: Loader,
+        range: impl RangeBounds<u32>,
     ) -> Self {
+        let start = match range.start_bound() {
+            std::ops::Bound::Included(&i) => i,
+            std::ops::Bound::Excluded(&i) => i + 1,
+            std::ops::Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            std::ops::Bound::Included(&i) => i + 1,
+            std::ops::Bound::Excluded(&i) => i,
+            std::ops::Bound::Unbounded => src.len_bytes() as u32,
+        };
+        let range = start..end;
+        let node = syntax.tree().root_node();
         // create fake injection for query root
         let injection = Injection {
             range: node.byte_range(),
-            layer,
+            layer: syntax.root,
         };
         let mut layer_manager = Box::new(QueryIterLayerManager {
-            query,
-            node,
+            range,
+            loader,
             src,
             syntax,
             // TODO: reuse allocations with an allocation pool
@@ -119,13 +139,33 @@ impl<'a, LayerState: Default> QueryIter<'a, LayerState> {
         }
     }
 
-    pub fn current_layer_state(&mut self) -> &mut LayerState {
-        &mut self.current_layer.state
+    pub fn syntax(&self) -> &'a Syntax {
+        self.layer_manager.syntax
+    }
+
+    pub fn loader(&mut self) -> &mut Loader {
+        &mut self.layer_manager.loader
+    }
+
+    #[inline]
+    pub fn current_injection(&mut self) -> (Injection, &mut LayerState) {
+        (
+            self.current_injection.clone(),
+            &mut self.current_layer.state,
+        )
+    }
+
+    #[inline]
+    pub fn current_language(&self) -> Language {
+        self.layer_manager
+            .syntax
+            .layer(self.current_injection.layer)
+            .language
     }
 
     pub fn layer_state(&mut self, layer: Layer) -> &mut LayerState {
         if layer == self.current_injection.layer {
-            self.current_layer_state()
+            &mut self.current_layer.state
         } else {
             &mut self
                 .layer_manager
@@ -161,8 +201,7 @@ impl<'a, LayerState: Default> QueryIter<'a, LayerState> {
         if layer_unfinished {
             self.layer_manager
                 .active_layers
-                .insert(injection.layer, layer)
-                .unwrap();
+                .insert(injection.layer, layer);
             Some((injection, None))
         } else {
             Some((injection, Some(layer.state)))
@@ -170,7 +209,11 @@ impl<'a, LayerState: Default> QueryIter<'a, LayerState> {
     }
 }
 
-impl<'a, S: Default> Iterator for QueryIter<'a, S> {
+impl<'a, Loader, S> Iterator for QueryIter<'a, Loader, S>
+where
+    Loader: QueryLoader<'a>,
+    S: Default,
+{
     type Item = QueryIterEvent<S>;
 
     fn next(&mut self) -> Option<QueryIterEvent<S>> {
@@ -179,9 +222,9 @@ impl<'a, S: Default> Iterator for QueryIter<'a, S> {
                 .current_layer
                 .injections
                 .peek()
-                .filter(|injection| injection.range.start < self.current_injection.range.end);
+                .filter(|injection| injection.range.start <= self.current_injection.range.end);
             let next_match = self.current_layer.query_iter.peek().filter(|matched_node| {
-                matched_node.byte_range.start < self.current_injection.range.end
+                matched_node.byte_range.start <= self.current_injection.range.end
             });
 
             match (next_match, next_injection) {
@@ -190,18 +233,24 @@ impl<'a, S: Default> Iterator for QueryIter<'a, S> {
                         QueryIterEvent::ExitInjection { injection, state }
                     });
                 }
+                (Some(mat), _) if mat.byte_range.is_empty() => {
+                    self.current_layer.query_iter.consume();
+                    continue;
+                }
                 (Some(_), None) => {
                     // consume match
                     let matched_node = self.current_layer.query_iter.consume();
                     return Some(QueryIterEvent::Match(matched_node));
                 }
                 (Some(matched_node), Some(injection))
-                    if matched_node.byte_range.start <= injection.range.end =>
+                    if matched_node.byte_range.start < injection.range.end =>
                 {
                     // consume match
                     let matched_node = self.current_layer.query_iter.consume();
                     // ignore nodes that are overlapped by the injection
-                    if matched_node.byte_range.start <= injection.range.start {
+                    if matched_node.byte_range.start < injection.range.start
+                        || injection.range.end < matched_node.byte_range.end
+                    {
                         return Some(QueryIterEvent::Match(matched_node));
                     }
                 }
@@ -216,6 +265,7 @@ impl<'a, S: Default> Iterator for QueryIter<'a, S> {
     }
 }
 
+#[derive(Debug)]
 pub enum QueryIterEvent<State = ()> {
     EnterInjection(Injection),
     Match(MatchedNode),
@@ -230,7 +280,20 @@ impl<S> QueryIterEvent<S> {
         match self {
             QueryIterEvent::EnterInjection(injection) => injection.range.start,
             QueryIterEvent::Match(mat) => mat.byte_range.start,
-            QueryIterEvent::ExitInjection { injection, .. } => injection.range.start,
+            QueryIterEvent::ExitInjection { injection, .. } => injection.range.end,
         }
+    }
+}
+
+pub trait QueryLoader<'a> {
+    fn get_query(&mut self, lang: Language) -> &'a Query;
+}
+
+impl<'a, F> QueryLoader<'a> for F
+where
+    F: FnMut(Language) -> &'a Query,
+{
+    fn get_query(&mut self, lang: Language) -> &'a Query {
+        (self)(lang)
     }
 }

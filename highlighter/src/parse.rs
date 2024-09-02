@@ -1,12 +1,11 @@
 use std::mem::take;
-use std::sync::Arc;
 use std::time::Duration;
 
 use ropey::RopeSlice;
 use tree_sitter::{InactiveQueryCursor, Parser};
 
-use crate::config::LanguageConfig;
-use crate::{Error, InjectionLanguageMarker, LayerData, Syntax, TREE_SITTER_MATCH_LIMIT};
+use crate::config::LanguageLoader;
+use crate::{Error, LayerData, Syntax, TREE_SITTER_MATCH_LIMIT};
 
 impl Syntax {
     pub fn update(
@@ -14,7 +13,7 @@ impl Syntax {
         source: RopeSlice,
         timeout: Duration,
         edits: &[tree_sitter::InputEdit],
-        injection_callback: impl Fn(&InjectionLanguageMarker) -> Option<Arc<LanguageConfig>>,
+        loader: &impl LanguageLoader,
     ) -> Result<(), Error> {
         // size limit of 512MiB, TS just cannot handle files this big (too
         // slow). Furthermore, TS uses 32 (signed) bit indecies so this limit
@@ -24,13 +23,14 @@ impl Syntax {
         }
 
         let mut queue = Vec::with_capacity(32);
+        self.layer_mut(self.root).flags.touched = true;
         queue.push(self.root);
 
         let mut parser = Parser::new();
         parser.set_timeout(timeout); // half a second is pretty generours
         let mut cursor = InactiveQueryCursor::new();
         // TODO: might need to set cursor range
-        cursor.set_byte_range(0..usize::MAX);
+        cursor.set_byte_range(0..u32::MAX);
         cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
 
         while let Some(layer) = queue.pop() {
@@ -45,15 +45,13 @@ impl Syntax {
                 }
                 if layer_data.flags.modified {
                     // Re-parse the tree.
-                    layer_data.parse(&mut parser, source)?;
+                    layer_data.parse(&mut parser, source, loader)?;
                 }
             } else {
                 // always parse if this layer has never been parsed before
-                layer_data.parse(&mut parser, source)?;
+                layer_data.parse(&mut parser, source, loader)?;
             }
-            self.run_injection_query(layer, edits, source, &injection_callback, |layer| {
-                queue.push(layer)
-            })
+            self.run_injection_query(layer, edits, source, loader, |layer| queue.push(layer))
         }
 
         self.prune_dead_layers();
@@ -166,11 +164,16 @@ impl Syntax {
 // }
 
 impl LayerData {
-    fn parse(&mut self, parser: &mut Parser, source: RopeSlice) -> Result<(), Error> {
+    fn parse(
+        &mut self,
+        parser: &mut Parser,
+        source: RopeSlice,
+        loader: &impl LanguageLoader,
+    ) -> Result<(), Error> {
         parser
             .set_included_ranges(&self.ranges)
             .map_err(|_| Error::InvalidRanges)?;
-        parser.set_language(self.config.grammar);
+        parser.set_grammar(loader.get_config(self.language).grammar);
         let tree = parser
             .parse(source, self.parse_tree.as_ref())
             .ok_or(Error::Timeout)?;

@@ -37,7 +37,7 @@ impl Config {
         })?;
 
         let grammar = match metadata {
-            Metadata::ReuseParser { name } => name,
+            Metadata::ReuseParser { name, .. } => name,
             Metadata::ParserDefinition { .. } => grammar.to_string(),
         };
 
@@ -262,6 +262,16 @@ pub fn list_grammars(config: &Config) -> Result<Vec<PathBuf>> {
     Ok(res)
 }
 
+pub fn use_new_precedance(config: &Config, grammar: &str) -> Result<bool> {
+    let repo = config
+        .repos
+        .iter()
+        .find(|repo| repo.has_grammar(config, grammar))
+        .with_context(|| format!("no definition found for {grammar}"))?;
+    let metadata = repo.read_metadata(config, grammar)?;
+    Ok(metadata.new_precedence())
+}
+
 pub fn build_all_grammars(
     config: &Config,
     force_rebuild: bool,
@@ -313,6 +323,10 @@ pub enum Metadata {
         /// Grammars should only be reused from the same `Repo`.
         #[serde(rename = "reuse-parser")]
         name: String,
+        /// Wether to use the new query precedence
+        /// where later matches take priority.
+        #[serde(default)]
+        new_precedence: bool,
     },
 }
 
@@ -323,15 +337,24 @@ impl Metadata {
             Self::ReuseParser { .. } => None,
         }
     }
+
     pub fn read(path: &Path) -> Result<Metadata> {
         let json = fs::read_to_string(path)
             .with_context(|| format!("couldn't read {}", path.display()))?;
         serde_json::from_str(&json)
             .with_context(|| format!("invalid metadata.json file at {}", path.display()))
     }
+
     pub fn write(&self, path: &Path) -> Result<()> {
         let json = serde_json::to_string_pretty(&self).unwrap();
         fs::write(path, json).with_context(|| format!("failed to write {}", path.display()))
+    }
+
+    pub fn new_precedence(&self) -> bool {
+        match self {
+            Metadata::ParserDefinition(def) => def.new_precedence,
+            Metadata::ReuseParser { new_precedence, .. } => *new_precedence,
+        }
     }
 }
 

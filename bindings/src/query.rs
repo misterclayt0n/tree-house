@@ -10,6 +10,7 @@ use crate::Grammar;
 mod predicate;
 mod property;
 
+#[derive(Debug)]
 pub enum UserPredicate<'a> {
     IsPropertySet {
         negate: bool,
@@ -66,6 +67,9 @@ pub struct Query {
     text_predicates: Vec<TextPredicate>,
     patterns: Box<[PatternData]>,
 }
+
+unsafe impl Send for Query {}
+unsafe impl Sync for Query {}
 
 impl Query {
     /// Create a new query from a string containing one or more S-expression

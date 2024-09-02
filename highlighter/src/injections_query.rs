@@ -2,17 +2,17 @@ use std::borrow::Cow;
 use std::iter::{self, Peekable};
 use std::mem::take;
 use std::path::Path;
-use std::sync::Arc;
 
 use hashbrown::HashMap;
 use once_cell::sync::Lazy;
 use regex_cursor::engines::meta::Regex;
 use ropey::RopeSlice;
 
-use crate::config::LanguageConfig;
+use crate::config::{LanguageConfig, LanguageLoader};
 use crate::parse::LayerUpdateFlags;
 use crate::{
-    byte_range_to_str, Injection, Layer, LayerData, Range, Syntax, TREE_SITTER_MATCH_LIMIT,
+    byte_range_to_str, Injection, Language, Layer, LayerData, Range, Syntax,
+    TREE_SITTER_MATCH_LIMIT,
 };
 use tree_sitter::query::UserPredicate;
 use tree_sitter::{
@@ -40,7 +40,7 @@ pub enum InjectionLanguageMarker<'a> {
 #[derive(Clone, Debug)]
 pub struct InjectionQueryMatch<'tree> {
     include_children: IncludedChildren,
-    language: Arc<LanguageConfig>,
+    language: Language,
     scope: Option<InjectionScope>,
     node: SyntaxTreeNode<'tree>,
     last_match: bool,
@@ -48,8 +48,13 @@ pub struct InjectionQueryMatch<'tree> {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 enum InjectionScope {
-    Match { id: u32 },
-    Pattern { pattern: Pattern, grammar: Grammar },
+    Match {
+        id: u32,
+    },
+    Pattern {
+        pattern: Pattern,
+        language: Language,
+    },
 }
 
 #[derive(Clone, Default, Debug)]
@@ -73,8 +78,8 @@ pub struct InjectionsQuery {
 impl InjectionsQuery {
     pub fn new(
         grammar: Grammar,
-        query_text: &str,
         query_path: impl AsRef<Path>,
+        query_text: &str,
     ) -> Result<Self, query::ParseError> {
         let mut injection_properties: HashMap<Pattern, InjectionProperties> = HashMap::new();
         let query = Query::new(grammar, query_text, query_path, |pattern, predicate| {
@@ -128,7 +133,7 @@ impl InjectionsQuery {
         query_match: &QueryMatch<'a, 'tree>,
         node_idx: MatchedNodeIdx,
         source: RopeSlice<'a>,
-        injection_callback: impl Fn(&InjectionLanguageMarker) -> Option<Arc<LanguageConfig>>,
+        loader: impl LanguageLoader,
     ) -> Option<InjectionQueryMatch<'tree>> {
         let properties = self
             .injection_properties
@@ -177,11 +182,12 @@ impl InjectionsQuery {
             .language
             .as_deref()
             .map(|name| InjectionLanguageMarker::Name(name.into())))?;
-        let language = injection_callback(&language)?;
+
+        let language = loader.load_language(&language)?;
         let scope = if properties.combined {
             Some(InjectionScope::Pattern {
                 pattern: query_match.pattern(),
-                grammar: language.grammar,
+                language,
             })
         } else if content_nodes != 1 {
             Some(InjectionScope::Match {
@@ -208,7 +214,7 @@ impl InjectionsQuery {
     /// resolved with normal precedance rules). However, ranges can be nested.
     /// For example:
     ///
-    /// ```
+    /// ``` no-compile
     ///   | range 2 |
     /// |   range 1  |
     /// ```
@@ -219,10 +225,10 @@ impl InjectionsQuery {
         node: &SyntaxTreeNode<'a>,
         source: RopeSlice<'a>,
         new_precedance: bool,
-        injection_callback: &'a impl Fn(&InjectionLanguageMarker) -> Option<Arc<LanguageConfig>>,
+        loader: &'a impl LanguageLoader,
     ) -> impl Iterator<Item = InjectionQueryMatch> + 'a {
         let mut cursor = InactiveQueryCursor::new();
-        cursor.set_byte_range(0..usize::MAX);
+        cursor.set_byte_range(0..u32::MAX);
         cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
         let mut cursor = cursor.execute_query(&self.query, node, source);
         let injection_content_capture = self.injection_content_capture.unwrap();
@@ -231,8 +237,7 @@ impl InjectionsQuery {
             if query_match.matched_node(node_idx).capture != injection_content_capture {
                 continue;
             }
-            let Some(mat) = self.process_match(&query_match, node_idx, source, injection_callback)
-            else {
+            let Some(mat) = self.process_match(&query_match, node_idx, source, loader) else {
                 query_match.remove();
                 continue;
             };
@@ -267,13 +272,16 @@ impl Syntax {
         layer: Layer,
         edits: &[tree_sitter::InputEdit],
         source: RopeSlice<'_>,
-        injection_callback: impl Fn(&InjectionLanguageMarker) -> Option<Arc<LanguageConfig>>,
+        loader: &impl LanguageLoader,
         mut parse_layer: impl FnMut(Layer),
     ) {
         self.map_injections(layer, None, edits);
         let layer_data = &mut self.layer_mut(layer);
-        let config = layer_data.config.clone();
-        let injections_query = &config.injections_query;
+        let LanguageConfig {
+            ref injections_query,
+            new_precedance,
+            ..
+        } = *loader.get_config(layer_data.language);
         if injections_query.injection_content_capture.is_none() {
             return;
         }
@@ -284,12 +292,8 @@ impl Syntax {
         let mut injections: Vec<Injection> = Vec::with_capacity(layer_data.injections.len());
         let mut old_injections = take(&mut layer_data.injections).into_iter().peekable();
 
-        let injection_query = injections_query.execute(
-            &parse_tree.root_node(),
-            source,
-            config.new_precedance,
-            &injection_callback,
-        );
+        let injection_query =
+            injections_query.execute(&parse_tree.root_node(), source, new_precedance, loader);
 
         let mut last_injection_end = 0;
         let mut combined_injections: HashMap<InjectionScope, Layer> = HashMap::with_capacity(32);
@@ -318,9 +322,9 @@ impl Syntax {
             }
             last_injection_end = range.end;
 
-            let grammar = mat.language.grammar;
+            let language = mat.language;
             let reused_injection =
-                self.reuse_injection(grammar, range.clone(), &mut old_injections);
+                self.reuse_injection(language, range.clone(), &mut old_injections);
             let layer = match mat.scope {
                 Some(scope @ InjectionScope::Match { .. }) if mat.last_match => {
                     combined_injections.remove(&scope).unwrap_or_else(|| {
@@ -368,6 +372,16 @@ impl Syntax {
         let layer_data = &mut self.layer_mut(layer);
         layer_data.ranges = parent_ranges;
         layer_data.parse_tree = Some(parse_tree);
+        // let ranges: Vec<_> = injections
+        //     .iter()
+        //     .map(|injection| {
+        //         (
+        //             injection.layer,
+        //             source.byte_slice(injection.range.start as usize..injection.range.end as usize),
+        //         )
+        //     })
+        //     .collect();
+        // println!("{ranges:?}");
         layer_data.injections = injections;
     }
 
@@ -439,15 +453,13 @@ impl Syntax {
     fn init_injection(
         &mut self,
         parent: Layer,
-        language: Arc<LanguageConfig>,
+        language: Language,
         reuse: Option<Injection>,
     ) -> Layer {
         match reuse {
             Some(old_injection) => {
                 let layer_data = self.layer_mut(old_injection.layer);
                 debug_assert_eq!(layer_data.parent, Some(parent));
-
-                layer_data.config = language;
                 layer_data.flags.reused = true;
                 layer_data.flags.modified = true;
                 layer_data.ranges.clear();
@@ -455,7 +467,7 @@ impl Syntax {
             }
             None => {
                 let layer = self.layers.insert(LayerData {
-                    config: language,
+                    language,
                     parse_tree: None,
                     ranges: Vec::new(),
                     injections: Vec::new(),
@@ -470,7 +482,7 @@ impl Syntax {
     // TODO: only reuse if same pattern is matched
     fn reuse_injection(
         &mut self,
-        grammar: Grammar,
+        language: Language,
         new_range: Range,
         injections: &mut Peekable<impl Iterator<Item = Injection>>,
     ) -> Option<Injection> {
@@ -482,7 +494,7 @@ impl Syntax {
         }
         let injection = injections.next_if(|injection| {
             injection.range.start < new_range.end
-                && self.layer(injection.layer).config.grammar == grammar
+                && self.layer(injection.layer).language == language
                 && !self.layer(injection.layer).flags.reused
         })?;
         Some(injection.clone())

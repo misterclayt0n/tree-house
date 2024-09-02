@@ -3,7 +3,7 @@ use std::os::raw::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr::NonNull;
 use std::time::Duration;
-use std::{fmt, ptr};
+use std::{fmt, mem, ptr};
 
 use regex_cursor::Cursor;
 
@@ -15,7 +15,19 @@ enum ParserData {}
 
 #[clippy::msrv = "1.76.0"]
 thread_local! {
-    static PARSER_CACHE: Cell<Option<Parser>> = const { Cell::new(None) };
+    static PARSER_CACHE: Cell<Option<RawParser>> = const { Cell::new(None) };
+}
+
+/// A stateful object that this is used to produce a [`SyntaxTree`] based on some
+/// source code.
+pub struct RawParser {
+    ptr: NonNull<ParserData>,
+}
+
+impl Drop for RawParser {
+    fn drop(&mut self) {
+        unsafe { ts_parser_delete(self.ptr) }
+    }
 }
 
 /// A stateful object that this is used to produce a [`SyntaxTree`] based on some
@@ -28,13 +40,19 @@ impl Parser {
     /// Create a new parser.
     #[must_use]
     pub fn new() -> Parser {
-        PARSER_CACHE.take().unwrap_or_else(|| Parser {
-            ptr: unsafe { ts_parser_new() },
-        })
+        let ptr = match PARSER_CACHE.take() {
+            Some(cached) => {
+                let ptr = cached.ptr;
+                mem::forget(cached);
+                ptr
+            }
+            None => unsafe { ts_parser_new() },
+        };
+        Parser { ptr }
     }
 
     /// Set the language that the parser should use for parsing.
-    pub fn set_language(&mut self, grammar: Grammar) {
+    pub fn set_grammar(&mut self, grammar: Grammar) {
         unsafe { ts_parser_set_language(self.ptr, grammar) };
     }
     pub fn set_timeout(&mut self, duration: Duration) {
@@ -79,14 +97,16 @@ impl Parser {
                 let input: &mut C = payload.cast().as_mut();
                 let cursor = input.cursor_at(byte_index);
                 let slice = cursor.chunk();
-                (slice.as_ptr(), slice.len().try_into().unwrap())
+                let offset: u32 = cursor.offset().try_into().unwrap();
+                let len: u32 = slice.len().try_into().unwrap();
+                (byte_index - offset, slice.as_ptr(), len)
             }));
             match cursor {
-                Ok((ptr, len)) => {
-                    *bytes_read = len;
-                    ptr
+                Ok((chunk_offset, ptr, len)) if chunk_offset < len => {
+                    *bytes_read = len - chunk_offset;
+                    ptr.add(chunk_offset as usize)
                 }
-                Err(_) => {
+                _ => {
                     *bytes_read = 0;
                     ptr::null()
                 }
@@ -104,10 +124,6 @@ impl Parser {
             new_tree.map(|raw| SyntaxTree::from_raw(raw))
         }
     }
-
-    pub fn reuse(self) {
-        PARSER_CACHE.set(Some(self));
-    }
 }
 
 impl Default for Parser {
@@ -121,7 +137,7 @@ unsafe impl Send for Parser {}
 
 impl Drop for Parser {
     fn drop(&mut self) {
-        unsafe { ts_parser_delete(self.ptr) }
+        PARSER_CACHE.set(Some(RawParser { ptr: self.ptr }));
     }
 }
 

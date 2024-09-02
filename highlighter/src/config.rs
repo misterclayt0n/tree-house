@@ -3,7 +3,8 @@ use regex::Regex;
 use tree_sitter::Grammar;
 
 use crate::highlighter::HighlightQuery;
-use crate::injections_query::InjectionsQuery;
+use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
+use crate::Language;
 
 use std::fmt::Write;
 
@@ -50,4 +51,22 @@ pub fn read_query(
             .into_owned()
     }
     read_query_impl(language, filename, &mut read_query_text)
+}
+
+pub trait LanguageLoader {
+    fn load_language(&self, marker: &InjectionLanguageMarker) -> Option<Language>;
+    fn get_config(&self, lang: Language) -> &LanguageConfig;
+}
+
+impl<'a, T> LanguageLoader for &'a T
+where
+    T: LanguageLoader,
+{
+    fn load_language(&self, marker: &InjectionLanguageMarker) -> Option<Language> {
+        T::load_language(self, marker)
+    }
+
+    fn get_config(&self, lang: Language) -> &LanguageConfig {
+        T::get_config(self, lang)
+    }
 }

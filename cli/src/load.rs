@@ -1,6 +1,4 @@
 use std::ffi::c_void;
-use std::fs;
-use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use libloading::Symbol;

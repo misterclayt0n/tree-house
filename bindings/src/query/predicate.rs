@@ -247,6 +247,7 @@ pub enum PredicateArg {
     String(QueryStr),
 }
 
+#[derive(Debug)]
 pub struct Predicate<'a> {
     pub name: QueryStr,
     args: &'a [PredicateStep],

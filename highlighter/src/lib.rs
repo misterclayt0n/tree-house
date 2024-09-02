@@ -5,12 +5,10 @@ use slab::Slab;
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use std::str;
-use std::sync::Arc;
 use std::time::Duration;
 use tree_sitter::{SyntaxTree, SyntaxTreeNode};
 
-use crate::config::LanguageConfig;
-use crate::injections_query::InjectionLanguageMarker;
+use crate::config::LanguageLoader;
 
 pub use crate::config::read_query;
 use crate::parse::LayerUpdateFlags;
@@ -22,6 +20,8 @@ mod config;
 pub mod highlighter;
 mod injections_query;
 mod parse;
+#[cfg(test)]
+mod tests;
 // mod pretty_print;
 pub mod query_iter;
 pub mod text_object;
@@ -34,6 +34,19 @@ pub struct Layer(u32);
 
 impl Layer {
     fn idx(self) -> usize {
+        self.0 as usize
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Language(pub u32);
+
+impl Language {
+    pub fn new(idx: u32) -> Language {
+        Language(idx)
+    }
+
+    pub fn idx(self) -> usize {
         self.0 as usize
     }
 }
@@ -54,10 +67,12 @@ impl Layer {
 /// the same layer do not intersect. However, the syntax tree in a an injected
 /// layer can have nodes that intersect with nodes from the parent layer. For
 /// example:
-/// ```
+///
+/// ``` no-compile
 /// layer2: | Sibling A |      Sibling B (layer3)     | Sibling C |
 /// layer1: | Sibling A (layer2) | Sibling B | Sibling C (layer2) |
 /// ````
+///
 /// In this case Sibling B really spans across a "GAP" in layer2. While the syntax
 /// node can not be split up by tree sitter directly, we can treat Sibling B as two
 /// seperate injections. That is done while parsing/running the query capture. As
@@ -72,13 +87,13 @@ pub struct Syntax {
 impl Syntax {
     pub fn new(
         source: RopeSlice,
-        config: Arc<LanguageConfig>,
+        language: Language,
         timeout: Duration,
-        injection_callback: impl Fn(&InjectionLanguageMarker) -> Option<Arc<LanguageConfig>>,
+        loader: &impl LanguageLoader,
     ) -> Result<Self, Error> {
         let root_layer = LayerData {
             parse_tree: None,
-            config,
+            language,
             flags: LayerUpdateFlags::default(),
             ranges: vec![tree_sitter::Range {
                 start_byte: 0,
@@ -98,9 +113,10 @@ impl Syntax {
             root: Layer(root as u32),
             layers,
         };
-        syntax
-            .update(source, timeout, &[], injection_callback)
-            .map(|_| syntax)
+        let res = syntax.update(source, timeout, &[], loader).map(|_| syntax);
+        println!("{res:?}");
+
+        res
     }
 
     fn layer(&self, layer: Layer) -> &LayerData {
@@ -175,7 +191,7 @@ pub struct Injection {
 
 #[derive(Debug)]
 pub struct LayerData {
-    config: Arc<LanguageConfig>,
+    language: Language,
     parse_tree: Option<SyntaxTree>,
     ranges: Vec<tree_sitter::Range>,
     /// a list of **sorted** non-overlapping injection ranges. Note that
@@ -194,7 +210,7 @@ pub struct LayerData {
 impl PartialEq for LayerData {
     fn eq(&self, other: &Self) -> bool {
         self.parent == other.parent
-            && self.config.grammar == other.config.grammar
+            && self.language == other.language
             && self.ranges == other.ranges
     }
 }
@@ -204,7 +220,7 @@ impl PartialEq for LayerData {
 impl Hash for LayerData {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.parent.hash(state);
-        self.config.grammar.hash(state);
+        self.language.hash(state);
         self.ranges.hash(state);
     }
 }

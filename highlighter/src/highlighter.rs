@@ -1,12 +1,13 @@
-use std::mem::replace;
+use std::cmp::min;
+use std::mem::{replace, take};
+use std::ops::RangeBounds;
 use std::path::Path;
 use std::slice;
-use std::sync::Arc;
 
-use arc_swap::ArcSwap;
-
-use crate::query_iter::{MatchedNode, QueryIter, QueryIterEvent};
-use crate::Layer;
+use crate::config::{LanguageConfig, LanguageLoader};
+use crate::query_iter::{MatchedNode, QueryIter, QueryIterEvent, QueryLoader};
+use crate::{Language, Layer, Syntax};
+use ropey::RopeSlice;
 use tree_sitter::query::Query;
 use tree_sitter::{query, Grammar};
 
@@ -16,7 +17,7 @@ use tree_sitter::{query, Grammar};
 #[derive(Debug)]
 pub struct HighlightQuery {
     pub query: Query,
-    pub(crate) highlight_indices: ArcSwap<Vec<Highlight>>,
+    pub(crate) highlight_indices: Vec<Highlight>,
 }
 
 impl HighlightQuery {
@@ -28,15 +29,13 @@ impl HighlightQuery {
         let query = Query::new(grammar, query_text, query_path, |_pattern, predicate| {
             Err(format!("unsupported predicate {predicate}").into())
         })?;
-        let highlight_indices =
-            ArcSwap::from_pointee(vec![Highlight::NONE; query.num_captures() as usize]);
         Ok(Self {
+            highlight_indices: vec![Highlight::NONE; query.num_captures() as usize],
             query,
-            highlight_indices,
         })
     }
 
-    /// Set the list of recognized highlight names.
+    /// Configures the list of recognized highlight nameus.
     ///
     /// Tree-sitter syntax-highlighting queries specify highlights in the form of dot-separated
     /// highlight names like `punctuation.bracket` and `function.method.builtin`. Consumers of
@@ -44,41 +43,20 @@ impl HighlightQuery {
     /// For example, the string `function.builtin` will match against `function.builtin.constructor`
     /// but will not match `function.method.builtin` and `function.method`.
     ///
-    /// When highlighting, results are returned as `Highlight` values, which contain the index
-    /// of the matched highlight this list of highlight names.
-    pub fn configure(&self, recognized_names: &[String]) {
-        let mut capture_parts = Vec::new();
-        let indices: Vec<_> = self
+    /// The closure provided to this function should therefore try to first lookup the full
+    /// name. If no highlight was found for that name it should [`rsplit_once('.')`](str::rsplit_once)
+    /// and retry until a highlight has been found. If none of the parent scopes are defined
+    /// then `Highlight::NONE` should be returned.
+    ///
+    /// When highlighting, results are returned as `Highlight` values, configured by this function.
+    /// The meaning of these indecies is up to the user of the implementation. The highlighter
+    /// treats the indices as entirely opaque.
+    pub fn configure(&mut self, mut f: impl FnMut(&str) -> Highlight) {
+        self.highlight_indices = self
             .query
             .captures()
-            .map(move |(_, capture_name)| {
-                capture_parts.clear();
-                capture_parts.extend(capture_name.split('.'));
-
-                let mut best_index = u32::MAX;
-                let mut best_match_len = 0;
-                for (i, recognized_name) in recognized_names.iter().enumerate() {
-                    let mut len = 0;
-                    let mut matches = true;
-                    for (i, part) in recognized_name.split('.').enumerate() {
-                        match capture_parts.get(i) {
-                            Some(capture_part) if *capture_part == part => len += 1,
-                            _ => {
-                                matches = false;
-                                break;
-                            }
-                        }
-                    }
-                    if matches && len > best_match_len {
-                        best_index = i as u32;
-                        best_match_len = len;
-                    }
-                }
-                Highlight(best_index)
-            })
+            .map(move |(_, capture_name)| f(capture_name))
             .collect();
-
-        self.highlight_indices.store(Arc::new(indices));
     }
 }
 
@@ -97,23 +75,18 @@ struct HighlightedNode {
 }
 
 #[derive(Debug, Default)]
-struct LayerData {
+pub struct LayerData {
     parent_highlights: usize,
     dormant_highlights: Vec<HighlightedNode>,
 }
 
-struct HighlighterConfig<'a> {
-    new_precedance: bool,
-    highlight_indices: &'a [Highlight],
-}
-
-pub struct Highligther<'a> {
-    query: QueryIter<'a, LayerData>,
+pub struct Highligther<'a, Loader: LanguageLoader> {
+    query: QueryIter<'a, HighlighQueryLoader<&'a Loader>, LayerData>,
     next_query_event: Option<QueryIterEvent<LayerData>>,
     active_highlights: Vec<HighlightedNode>,
     next_highlight_end: u32,
     next_highlight_start: u32,
-    config: HighlighterConfig<'a>,
+    active_config: &'a LanguageConfig,
 }
 
 pub struct HighlightList<'a>(slice::Iter<'a, HighlightedNode>);
@@ -124,6 +97,10 @@ impl<'a> Iterator for HighlightList<'a> {
     fn next(&mut self) -> Option<Highlight> {
         self.0.next().map(|node| node.highlight)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
 }
 
 pub enum HighlighEvent<'a> {
@@ -131,7 +108,27 @@ pub enum HighlighEvent<'a> {
     PushHighlights(HighlightList<'a>),
 }
 
-impl<'a> Highligther<'a> {
+impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
+    pub fn new(
+        syntax: &'a Syntax,
+        src: RopeSlice<'a>,
+        loader: &'a Loader,
+        range: impl RangeBounds<u32>,
+    ) -> Self {
+        let mut query = QueryIter::new(syntax, src, HighlighQueryLoader(loader), range);
+        let active_language = query.current_language();
+        let mut res = Highligther {
+            active_config: query.loader().0.get_config(active_language),
+            next_query_event: None,
+            active_highlights: Vec::new(),
+            next_highlight_end: u32::MAX,
+            next_highlight_start: 0,
+            query,
+        };
+        res.advance_query_iter();
+        res
+    }
+
     pub fn active_highlights(&self) -> HighlightList<'_> {
         HighlightList(self.active_highlights.iter())
     }
@@ -146,14 +143,14 @@ impl<'a> Highligther<'a> {
 
         let pos = self.next_event_offset();
         if self.next_highlight_end == pos {
-            self.process_injection_ends();
+            // self.process_injection_ends();
             self.process_higlight_end();
             refresh = true;
         }
 
         let mut first_highlight = true;
         while self.next_highlight_start == pos {
-            let Some(query_event) = self.adance_query_iter() else {
+            let Some(query_event) = self.advance_query_iter() else {
                 break;
             };
             match query_event {
@@ -166,6 +163,8 @@ impl<'a> Highligther<'a> {
                         self.deactive_layer(injection.layer);
                         refresh = true;
                     }
+                    let active_language = self.query.current_language();
+                    self.active_config = self.query.loader().0.get_config(active_language);
                 }
             }
         }
@@ -183,7 +182,7 @@ impl<'a> Highligther<'a> {
         }
     }
 
-    fn adance_query_iter(&mut self) -> Option<QueryIterEvent<LayerData>> {
+    fn advance_query_iter(&mut self) -> Option<QueryIterEvent<LayerData>> {
         let event = replace(&mut self.next_query_event, self.query.next());
         self.next_highlight_start = self
             .next_query_event
@@ -197,42 +196,27 @@ impl<'a> Highligther<'a> {
             .active_highlights
             .iter()
             .rposition(|highlight| highlight.end != self.next_highlight_end)
-            .unwrap();
+            .map_or(0, |i| i + 1);
         self.active_highlights.truncate(i);
     }
 
-    /// processes injections that end at the same position as highlights first.
-    fn process_injection_ends(&mut self) {
-        while self.next_highlight_end == self.next_highlight_start {
-            match self.next_query_event.as_ref() {
-                Some(QueryIterEvent::ExitInjection { injection, state }) => {
-                    if state.is_none() {
-                        self.deactive_layer(injection.layer);
-                    }
-                }
-                Some(QueryIterEvent::Match(matched_node)) if matched_node.byte_range.is_empty() => {
-                }
-                _ => break,
-            }
-        }
-    }
-
     fn enter_injection(&mut self) {
-        self.query.current_layer_state().parent_highlights = self.active_highlights.len();
+        let active_language = self.query.current_language();
+        self.active_config = self.query.loader().0.get_config(active_language);
+        let data = self.query.current_injection().1;
+        data.parent_highlights = self.active_highlights.len();
+        self.active_highlights.append(&mut data.dormant_highlights);
     }
 
     fn deactive_layer(&mut self, layer: Layer) {
         let LayerData {
-            parent_highlights,
+            mut parent_highlights,
             ref mut dormant_highlights,
             ..
         } = *self.query.layer_state(layer);
-        let i = self.active_highlights[parent_highlights..]
-            .iter()
-            .rposition(|highlight| highlight.end != self.next_highlight_end)
-            .unwrap();
-        self.active_highlights.truncate(parent_highlights + i);
-        dormant_highlights.extend(self.active_highlights.drain(parent_highlights..))
+        parent_highlights = parent_highlights.min(self.active_highlights.len());
+        dormant_highlights.extend(self.active_highlights.drain(parent_highlights..));
+        self.process_higlight_end();
     }
 
     fn start_highlight(&mut self, node: MatchedNode, first_highlight: &mut bool) {
@@ -248,13 +232,13 @@ impl<'a> Highligther<'a> {
                 .last()
                 .map_or(false, |prev_node| prev_node.end == node.byte_range.end)
         {
-            if self.config.new_precedance {
+            if self.active_config.new_precedance {
                 self.active_highlights.pop();
             } else {
                 return;
             }
         }
-        let highlight = self.config.highlight_indices[node.capture.idx()];
+        let highlight = self.active_config.highight_query.highlight_indices[node.capture.idx()];
         if highlight.0 == u32::MAX {
             return;
         }
@@ -263,5 +247,13 @@ impl<'a> Highligther<'a> {
             highlight,
         });
         *first_highlight = false;
+    }
+}
+
+pub(crate) struct HighlighQueryLoader<T>(T);
+
+impl<'a, T: LanguageLoader> QueryLoader<'a> for HighlighQueryLoader<&'a T> {
+    fn get_query(&mut self, lang: Language) -> &'a Query {
+        &self.0.get_config(lang).highight_query.query
     }
 }

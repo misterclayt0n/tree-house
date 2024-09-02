@@ -12,7 +12,7 @@ impl QueryProperty {
         predicate.check_min_arg_count(1)?;
         predicate.check_max_arg_count(2)?;
         let key = predicate.query_str_arg(0)?;
-        let val = (predicate.num_args() == 1)
+        let val = (predicate.num_args() == 2)
             .then(|| predicate.query_str_arg(1))
             .transpose()?;
         Ok(QueryProperty { key, val })

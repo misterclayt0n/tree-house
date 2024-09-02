@@ -105,7 +105,7 @@ impl RegenerateParser {
             }
         }
         ensure!(
-            !failed.is_empty(),
+            failed.is_empty(),
             "parser.c files is not up to date for {failed:?}!"
         );
         Ok(())
