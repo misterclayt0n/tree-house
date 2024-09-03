@@ -1,4 +1,6 @@
 use std::borrow::Cow;
+use std::cmp::Reverse;
+use std::collections::VecDeque;
 use std::iter::{self, Peekable};
 use std::mem::take;
 use std::path::Path;
@@ -44,6 +46,7 @@ pub struct InjectionQueryMatch<'tree> {
     scope: Option<InjectionScope>,
     node: SyntaxTreeNode<'tree>,
     last_match: bool,
+    pattern: Pattern,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -57,7 +60,7 @@ enum InjectionScope {
     },
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 enum IncludedChildren {
     #[default]
     None,
@@ -203,6 +206,7 @@ impl InjectionsQuery {
             include_children: properties.include_children,
             node: query_match.matched_node(node_idx).syntax_node.clone(),
             last_match: last_content_node == node_idx,
+            pattern: query_match.pattern(),
         })
     }
 
@@ -250,18 +254,54 @@ impl InjectionsQuery {
             }
             break Some(mat);
         });
+        let mut buf = Vec::new();
         let mut iter = iter.peekable();
+        // handle identical/overlapping matches to correctly account for precedance
         iter::from_fn(move || {
+            if let Some(mat) = buf.pop() {
+                return Some(mat);
+            }
             let mut res = iter.next()?;
-            // handle identical matches to correctly account for precedance
-            while let Some(overlap) =
-                iter.next_if(|mat| mat.node.byte_range() == res.node.byte_range())
-            {
-                if new_precedance {
-                    res = overlap;
+            // if children are not included then nested injections don't
+            // interfere with each other unless exactly identical. Since
+            // this is the default setting we have a fastpath for it
+            if res.include_children == IncludedChildren::None {
+                let mut fast_return = true;
+                while let Some(overlap) =
+                    iter.next_if(|mat| mat.node.byte_range() == res.node.byte_range())
+                {
+                    if overlap.include_children != IncludedChildren::None {
+                        buf.push(overlap);
+                        fast_return = false;
+                        break;
+                    }
+                    if new_precedance {
+                        res = overlap;
+                    }
+                }
+                if fast_return {
+                    return Some(res);
                 }
             }
-            Some(res)
+
+            // we if can't use the fastpath we accumulate all overlapping matches
+            // and then sort them accordin to presedance rules...
+            while let Some(overlap) = iter.next_if(|mat| mat.node.end_byte() <= res.node.end_byte())
+            {
+                buf.push(overlap)
+            }
+            if buf.is_empty() {
+                return Some(res);
+            }
+            buf.push(res);
+            if new_precedance {
+                buf.sort_unstable_by_key(|mat| (mat.pattern, Reverse(mat.node.start_byte())))
+            } else {
+                buf.sort_unstable_by_key(|mat| {
+                    (Reverse(mat.pattern), Reverse(mat.node.start_byte()))
+                })
+            }
+            buf.pop()
         })
     }
 }
