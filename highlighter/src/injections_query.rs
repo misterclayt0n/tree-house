@@ -295,7 +295,6 @@ impl Syntax {
         let injection_query =
             injections_query.execute(&parse_tree.root_node(), source, new_precedance, loader);
 
-        let mut last_injection_end = 0;
         let mut combined_injections: HashMap<InjectionScope, Layer> = HashMap::with_capacity(32);
         for mat in injection_query {
             let range = mat.node.byte_range();
@@ -305,12 +304,18 @@ impl Syntax {
             // however in case the parent node does not include children it
             // is possible that one of these children is another seperate
             // injections. In these cases we cannot skip the injection
-            if last_injection_end > range.start {
-                if last_injection_end <= range.end
-                    || injections.last().unwrap().range.start <= range.start
-                {
-                    // this condition is not needed but serves as fast path
-                    // for common cases
+            //
+            // also the presedance sorting (and rane intersection) means that
+            // overlapping injections may be sorted not by position but by
+            // presedance (higest presedance first). the code here ensures
+            // that injections get sorted to the correct position
+            if let Some(last_injection) = injections
+                .last()
+                .filter(|injection| injection.range.end >= range.end)
+            {
+                // this condition is not needed but serves as fast path
+                // for common cases
+                if last_injection.range.start <= range.start {
                     continue;
                 } else {
                     insert_position =
@@ -320,7 +325,6 @@ impl Syntax {
                     }
                 }
             }
-            last_injection_end = range.end;
 
             let language = mat.language;
             let reused_injection =
@@ -372,16 +376,6 @@ impl Syntax {
         let layer_data = &mut self.layer_mut(layer);
         layer_data.ranges = parent_ranges;
         layer_data.parse_tree = Some(parse_tree);
-        // let ranges: Vec<_> = injections
-        //     .iter()
-        //     .map(|injection| {
-        //         (
-        //             injection.layer,
-        //             source.byte_slice(injection.range.start as usize..injection.range.end as usize),
-        //         )
-        //     })
-        //     .collect();
-        // println!("{ranges:?}");
         layer_data.injections = injections;
     }
 

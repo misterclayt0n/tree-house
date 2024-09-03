@@ -41,7 +41,7 @@ impl Display for UserPredicate<'_> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Pattern(pub(crate) u32);
 
 impl Pattern {
