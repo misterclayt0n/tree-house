@@ -219,10 +219,14 @@ fn render_fixture_line(
         offsets.push((offset, width));
         let first_char = if scopes.is_empty() {
             "━"
-        } else if i == highlights.len() - 1 {
-            "╰"
         } else if width == 0 {
-            "╿"
+            if i == highlights.len() - 1 {
+                "╰"
+            } else {
+                "╿"
+            }
+        } else if i == highlights.len() - 1 {
+            "┗"
         } else {
             "┡"
         };

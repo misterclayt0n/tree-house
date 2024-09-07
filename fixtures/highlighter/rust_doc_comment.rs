@@ -5,7 +5,7 @@
 // │   ╰─ comment markup.bold punctuation.bracket
 // ╰─ comment
    /// **foo
-// ┡━━┛┡┛╰━┹─ comment markup.bold
+// ┡━━┛┡┛┗━┹─ comment markup.bold
 // │   ╰─ comment markup.bold punctuation.bracket
 // ╰─ comment
    fn foo() {

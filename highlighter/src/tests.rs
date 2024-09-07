@@ -29,7 +29,13 @@ fn skidder_config() -> skidder::Config {
     }
 }
 
-fn get_grammar(grammar: &str) -> LanguageConfig {
+#[derive(Debug, Clone, Default)]
+struct Overwrites {
+    highlights: Option<String>,
+    injections: Option<String>,
+}
+
+fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
     let skidder_config = skidder_config();
     let grammar_dir = skidder_config.grammar_dir(grammar).unwrap();
     let new_precedance = skidder::use_new_precedance(&skidder_config, grammar).unwrap();
@@ -39,7 +45,10 @@ fn get_grammar(grammar: &str) -> LanguageConfig {
     let highight_query = HighlightQuery::new(
         grammar,
         &highlights_query_path,
-        &fs::read_to_string(&highlights_query_path).unwrap(),
+        &overwrites
+            .highlights
+            .clone()
+            .unwrap_or_else(|| fs::read_to_string(&highlights_query_path).unwrap()),
     )
     .unwrap();
     let injections_query_path = grammar_dir.join("injections.scm");
@@ -49,7 +58,10 @@ fn get_grammar(grammar: &str) -> LanguageConfig {
     let injections_query = InjectionsQuery::new(
         grammar,
         &injections_query_path,
-        &fs::read_to_string(&injections_query_path).unwrap_or_default(),
+        &overwrites
+            .injections
+            .clone()
+            .unwrap_or_else(|| fs::read_to_string(&injections_query_path).unwrap_or_default()),
     )
     .unwrap();
     LanguageConfig {
@@ -65,6 +77,7 @@ struct TestLanguageLoader {
     // this would be done with something like IndexMap normally but I don't want to pull that in for a test
     languages: IndexMap<String, Language>,
     lang_config: Box<[OnceCell<LanguageConfig>]>,
+    overwrites: Box<[Overwrites]>,
     test_theme: RefCell<IndexSet<String>>,
 }
 
@@ -75,6 +88,8 @@ impl TestLanguageLoader {
         let grammars = skidder::list_grammars(&skidder_config).unwrap();
         let mut loader = TestLanguageLoader {
             lang_config: (0..grammars.len()).map(|_| OnceCell::new()).collect(),
+            overwrites: vec![Overwrites::default(); grammars.len()].into_boxed_slice(),
+            test_theme: RefCell::default(),
             languages: grammars
                 .into_iter()
                 .enumerate()
@@ -85,7 +100,6 @@ impl TestLanguageLoader {
                     )
                 })
                 .collect(),
-            test_theme: RefCell::default(),
         };
         loader.languages.insert(
             "markdown.inline".into(),
@@ -94,8 +108,60 @@ impl TestLanguageLoader {
         loader
     }
 
-    fn get(&mut self, name: &str) -> Language {
+    fn get(&self, name: &str) -> Language {
         self.languages[name]
+    }
+
+    fn overwrite_injections(&mut self, lang: &str, content: String) {
+        let lang = self.get(lang);
+        self.overwrites[lang.idx()].injections = Some(content);
+        self.lang_config[lang.idx()] = OnceCell::new();
+    }
+
+    fn overwrite_highlights(&mut self, lang: &str, content: String) {
+        let lang = self.get(lang);
+        self.overwrites[lang.idx()].highlights = Some(content);
+        self.lang_config[lang.idx()] = OnceCell::new();
+    }
+    fn shadow_injections(&mut self, lang: &str, content: &str) {
+        let lang = self.get(lang);
+        let skidder_config = skidder_config();
+        let grammar = self.languages.get_index(lang.idx()).unwrap().0;
+        let new_precedance = skidder::use_new_precedance(&skidder_config, grammar).unwrap();
+        let grammar_dir = skidder_config.grammar_dir(grammar).unwrap();
+        let mut injections =
+            fs::read_to_string(grammar_dir.join("injections.scm")).unwrap_or_default();
+        if new_precedance {
+            injections.push('\n');
+            injections.push_str(content)
+        } else {
+            let mut content = content.to_owned();
+            content.push('\n');
+            content.push_str(&injections);
+            injections = content;
+        }
+        self.overwrites[lang.idx()].injections = Some(injections);
+        self.lang_config[lang.idx()] = OnceCell::new();
+    }
+
+    fn shadow_highlights(&mut self, lang: &str, content: &str) {
+        let lang = self.get(lang);
+        let skidder_config = skidder_config();
+        let grammar = self.languages.get_index(lang.idx()).unwrap().0;
+        let new_precedance = skidder::use_new_precedance(&skidder_config, grammar).unwrap();
+        let grammar_dir = skidder_config.grammar_dir(grammar).unwrap();
+        let mut highlights = fs::read_to_string(grammar_dir.join("highlights.scm")).unwrap();
+        if new_precedance {
+            highlights.push('\n');
+            highlights.push_str(content)
+        } else {
+            let mut content = content.to_owned();
+            content.push('\n');
+            content.push_str(&highlights);
+            highlights = content;
+        }
+        self.overwrites[lang.idx()].highlights = Some(highlights);
+        self.lang_config[lang.idx()] = OnceCell::new();
     }
 }
 
@@ -109,7 +175,10 @@ impl LanguageLoader for TestLanguageLoader {
 
     fn get_config(&self, lang: Language) -> &LanguageConfig {
         self.lang_config[lang.idx()].get_or_init(|| {
-            let mut config = get_grammar(self.languages.get_index(lang.idx()).unwrap().0);
+            let mut config = get_grammar(
+                self.languages.get_index(lang.idx()).unwrap().0,
+                &self.overwrites[lang.idx()],
+            );
             let mut theme = self.test_theme.borrow_mut();
             config
                 .highight_query
@@ -119,7 +188,7 @@ impl LanguageLoader for TestLanguageLoader {
     }
 }
 
-fn fixture(loader: &mut TestLanguageLoader, fixture: impl AsRef<Path>) {
+fn fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
     let path = Path::new("../fixtures").join(fixture);
     let snapshot = fs::read_to_string(&path)
         .unwrap_or_default()
@@ -174,12 +243,68 @@ You can update all fixtures by running:
 
 #[test]
 fn highlight() {
-    let mut loader = TestLanguageLoader::new();
-    fixture(&mut loader, "highlighter/hellow_world.rs");
+    let loader = TestLanguageLoader::new();
+    fixture(&loader, "highlighter/hellow_world.rs");
 }
 
 #[test]
 fn combined_injection() {
     let mut loader = TestLanguageLoader::new();
-    fixture(&mut loader, "highlighter/combined_injections.rs");
+    loader.shadow_injections(
+        "rust",
+        r#"
+((doc_comment) @injection.content
+ (#set! injection.language "markdown")
+ (#set! injection.combined))"#,
+    );
+    fixture(&loader, "highlighter/rust_doc_comment.rs");
+}
+
+#[test]
+fn injection_in_child() {
+    let mut loader = TestLanguageLoader::new();
+    // here doc_comment is a child of line_comment which has higher precedance
+    // however since it doesn't include children the doc_comment injection is
+    // still active here. This could probalby use a more realworld usecase (maybe nix?)
+    loader.shadow_injections(
+        "rust",
+        r#"
+([(line_comment) (block_comment)] @injection.content
+ (#set! injection.language "comment"))
+
+([(line_comment (doc_comment) @injection.content) (block_comment (doc_comment) @injection.content)]
+ (#set! injection.language "markdown")
+ (#set! injection.combined))
+"#,
+    );
+    fixture(&loader, "highlighter/rust_doc_comment.rs");
+}
+
+#[test]
+fn injection_precedance() {
+    let mut loader = TestLanguageLoader::new();
+    loader.shadow_injections(
+        "rust",
+        r#"
+([(line_comment (doc_comment) @injection.content) (block_comment (doc_comment) @injection.content)]
+ (#set! injection.language "markdown")
+ (#set! injection.combined))
+
+([(line_comment) (block_comment)] @injection.content
+ (#set! injection.language "comment")
+ (#set! injection.include-children))"#,
+    );
+    fixture(&loader, "highlighter/rust_doc_comment.rs");
+    loader.shadow_injections(
+        "rust",
+        r#"
+([(line_comment) (block_comment)] @injection.content
+ (#set! injection.language "comment")
+ (#set! injection.include-children))
+
+([(line_comment (doc_comment) @injection.content) (block_comment (doc_comment) @injection.content)]
+ (#set! injection.language "markdown")
+ (#set! injection.combined))"#,
+    );
+    fixture(&loader, "highlighter/rust_no_doc_comment.rs");
 }
