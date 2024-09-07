@@ -9,6 +9,10 @@ repository = "https://github.com/helix-editor/tree-sitter-helix"
 readme = "../README.md"
 rust-version = "1.76.0"
 
+[features]
+default = ["fixtures"]
+fixtures = ["dep:unicode-width"]
+
 [dependencies]
 ropey = { version = "1.6.1", default-features = false }
 arc-swap = "1"
@@ -16,11 +20,13 @@ hashbrown = { version = "0.14.3", features = ["raw"] }
 regex = "1"
 regex-cursor = "0.1.4"
 slab = "0.4.9"
+unicode-width = { version = "=0.1.12", optional = true }
 
 [dev-dependencies]
 cov-mark = "2.0.0"
-expect-test = "1.5.0"
 indexmap = "2.5.0"
+indoc = "2.0.5"
+pretty_assertions = "1.4.0"
 skidder = { path = "../skidder" }
 
 [dependencies.tree-sitter]

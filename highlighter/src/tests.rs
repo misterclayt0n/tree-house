@@ -1,17 +1,19 @@
 use std::cell::RefCell;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use expect_test::expect;
 use indexmap::{IndexMap, IndexSet};
+use indoc::indoc;
 use once_cell::unsync::OnceCell;
-use ropey::{Rope, RopeSlice};
+use pretty_assertions::StrComparison;
+use ropey::Rope;
 use skidder::Repo;
 use tree_sitter::Grammar;
 
 use crate::config::{LanguageConfig, LanguageLoader};
-use crate::highlighter::{HighlighEvent, Highlight, HighlightQuery, Highligther};
+use crate::fixtures::roundtrip_fixture;
+use crate::highlighter::{Highlight, HighlightQuery};
 use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
 use crate::{Language, Syntax};
 
@@ -117,153 +119,67 @@ impl LanguageLoader for TestLanguageLoader {
     }
 }
 
-fn collect_highlights(
-    loader: &TestLanguageLoader,
-    syntax: &Syntax,
-    src: RopeSlice<'_>,
-    start: usize,
-) -> Vec<(String, Vec<String>)> {
-    let mut highlighter = Highligther::new(syntax, src, &loader, start as u32..);
-    let mut res = Vec::new();
-    let mut pos = highlighter.next_event_offset();
-    let mut highlight_stack = Vec::new();
-    while pos < src.len_bytes() as u32 {
-        let new_highlights = match highlighter.advance() {
-            HighlighEvent::RefreshHiglights(highlights) => {
-                highlight_stack.clear();
-                highlights
-            }
-            HighlighEvent::PushHighlights(highlights) => highlights,
-        };
-        highlight_stack.extend(
-            new_highlights
-                .map(|highlight| loader.test_theme.borrow()[highlight.0 as usize].clone()),
-        );
-        let start = pos;
-        pos = highlighter.next_event_offset();
-        if pos == u32::MAX {
-            pos = src.len_bytes() as u32
-        }
-        if highlight_stack.is_empty() {
-            continue;
-        }
-        let src = src.byte_slice(start as usize..pos as usize).to_string();
-        println!("{src:?} = {highlight_stack:?}");
-        res.push((src, highlight_stack.clone()))
-    }
-    res
-}
+fn fixture(loader: &mut TestLanguageLoader, fixture: impl AsRef<Path>) {
+    let path = Path::new("../fixtures").join(fixture);
+    let snapshot = fs::read_to_string(&path)
+        .unwrap_or_default()
+        .replace("\r\n", "\n");
+    let snapshot = snapshot.trim_end();
+    let lang = match path
+        .extension()
+        .and_then(|it| it.to_str())
+        .unwrap_or_default()
+    {
+        "rs" => loader.get("rust"),
+        extension => unreachable!("unkown file type .{extension}"),
+    };
+    let roundtrip = roundtrip_fixture(
+        "// ",
+        lang,
+        loader,
+        |highlight| loader.test_theme.borrow()[highlight.0 as usize].clone(),
+        snapshot,
+        |_| ..,
+    );
+    if snapshot != roundtrip.trim_end() {
+        if std::env::var_os("UPDATE_EXPECT").is_some_and(|it| it == "1") {
+            println!("\x1b[1m\x1b[92mupdating\x1b[0m: {}", path.display());
+            fs::write(path, roundtrip).unwrap();
+        } else {
+            println!(
+                "\n
+{}
 
-macro_rules! fixture {
-    (
-        $loader: expr,
-        $syntax: expr,
-        $src: expr,
-        $start: expr,
-        $fixture: expr
-    ) => {{
-        use std::fmt::Write;
-        let scopes = collect_highlights($loader, $syntax, $src, $start);
-        let mut res = String::new();
-        for scope in scopes {
-            writeln!(res, "{:?} {:?}", scope.0, scope.1).unwrap();
+\x1b[1m\x1b[91merror\x1b[97m: fixture test failed\x1b[0m
+   \x1b[1m\x1b[34m-->\x1b[0m {}
+
+You can update all fixtures by running:
+
+    env UPDATE_EXPECT=1 cargo test
+",
+                StrComparison::new(snapshot, &roundtrip.trim_end()),
+                path.display(),
+            );
         }
-        $fixture.assert_eq(&res);
-    }};
+
+        std::panic::resume_unwind(Box::new(()));
+    }
+    pretty_assertions::assert_str_eq!(
+        snapshot,
+        roundtrip.trim_end(),
+        "fixture {} out of date, set UPDATE_EXPECT=1",
+        path.display()
+    );
 }
 
 #[test]
 fn highlight() {
     let mut loader = TestLanguageLoader::new();
-    let lang = loader.get("rust");
-    let source = Rope::from_str(
-        r#"
-        fn main() {
-            println!("hello world")
-        }
-    "#,
-    );
-    let syntax = Syntax::new(source.slice(..), lang, Duration::from_secs(1), &loader).unwrap();
-    fixture!(
-        &loader,
-        &syntax,
-        source.slice(..),
-        0,
-        expect![[r#"
-        "fn" ["keyword.function"]
-        "main" ["function"]
-        "(" ["punctuation.bracket"]
-        ")" ["punctuation.bracket"]
-        "{" ["punctuation.bracket"]
-        "println" ["function.macro"]
-        "!" ["function.macro"]
-        "(" ["punctuation.bracket"]
-        "\"hello world\"" ["string"]
-        ")" ["punctuation.bracket"]
-        "}" ["punctuation.bracket"]
-    "#]]
-    );
+    fixture(&mut loader, "highlighter/hellow_world.rs");
 }
 
 #[test]
 fn combined_injection() {
     let mut loader = TestLanguageLoader::new();
-    let lang = loader.get("rust");
-    let source = Rope::from_str(
-        r#"
-        /// **hello-world** 
-        /// **foo
-        fn foo() {
-            println!("hello world")
-        }
-        /// bar**
-        fn bar() {
-            println!("hello world")
-        }
-    "#,
-    );
-    let syntax = Syntax::new(source.slice(..), lang, Duration::from_secs(1), &loader).unwrap();
-    fixture!(&loader, &syntax, source.slice(..), 0, expect![[r#"
-        "///" ["comment"]
-        " " ["comment"]
-        "*" ["comment", "markup.bold", "punctuation.bracket"]
-        "*" ["comment", "markup.bold", "punctuation.bracket"]
-        "hello-world" ["comment", "markup.bold"]
-        "*" ["comment", "markup.bold", "punctuation.bracket"]
-        "*" ["comment", "markup.bold", "punctuation.bracket"]
-        " \n" ["comment"]
-        "///" ["comment"]
-        " " ["comment"]
-        "*" ["comment", "markup.bold", "punctuation.bracket"]
-        "*" ["comment", "markup.bold", "punctuation.bracket"]
-        "foo\n" ["comment", "markup.bold"]
-        "" ["comment"]
-        "fn" ["keyword.function"]
-        "foo" ["function"]
-        "(" ["punctuation.bracket"]
-        ")" ["punctuation.bracket"]
-        "{" ["punctuation.bracket"]
-        "println" ["function.macro"]
-        "!" ["function.macro"]
-        "(" ["punctuation.bracket"]
-        "\"hello world\"" ["string"]
-        ")" ["punctuation.bracket"]
-        "}" ["punctuation.bracket"]
-        "///" ["comment"]
-        " bar" ["comment", "markup.bold"]
-        "*" ["comment", "markup.bold", "punctuation.bracket"]
-        "*" ["comment", "markup.bold", "punctuation.bracket"]
-        "\n" ["comment"]
-        "fn" ["keyword.function"]
-        "bar" ["function"]
-        "(" ["punctuation.bracket"]
-        ")" ["punctuation.bracket"]
-        "{" ["punctuation.bracket"]
-        "println" ["function.macro"]
-        "!" ["function.macro"]
-        "(" ["punctuation.bracket"]
-        "\"hello world\"" ["string"]
-        ")" ["punctuation.bracket"]
-        "}" ["punctuation.bracket"]
-    "#]]);
+    fixture(&mut loader, "highlighter/combined_injections.rs");
 }
