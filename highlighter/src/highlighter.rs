@@ -144,7 +144,7 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
         let pos = self.next_event_offset();
         if self.next_highlight_end == pos {
             // self.process_injection_ends();
-            self.process_higlight_end();
+            self.process_higlight_end(pos);
             refresh = true;
         }
 
@@ -191,11 +191,11 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
         event
     }
 
-    fn process_higlight_end(&mut self) {
+    fn process_higlight_end(&mut self, pos: u32) {
         let i = self
             .active_highlights
             .iter()
-            .rposition(|highlight| highlight.end != self.next_highlight_end)
+            .rposition(|highlight| highlight.end != pos)
             .map_or(0, |i| i + 1);
         self.active_highlights.truncate(i);
     }
@@ -216,7 +216,7 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
         } = *self.query.layer_state(layer);
         parent_highlights = parent_highlights.min(self.active_highlights.len());
         dormant_highlights.extend(self.active_highlights.drain(parent_highlights..));
-        self.process_higlight_end();
+        self.process_higlight_end(self.next_highlight_start);
     }
 
     fn start_highlight(&mut self, node: MatchedNode, first_highlight: &mut bool) {
@@ -239,14 +239,13 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
             }
         }
         let highlight = self.active_config.highight_query.highlight_indices[node.capture.idx()];
-        if highlight.0 == u32::MAX {
-            return;
+        if highlight != Highlight::NONE {
+            self.active_highlights.push(HighlightedNode {
+                end: node.byte_range.end,
+                highlight,
+            });
+            *first_highlight = false;
         }
-        self.active_highlights.push(HighlightedNode {
-            end: node.byte_range.end,
-            highlight,
-        });
-        *first_highlight = false;
     }
 }
 
