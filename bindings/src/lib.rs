@@ -11,6 +11,7 @@ mod ropey;
 #[cfg(feature = "ropey")]
 pub use ropey::RopeTsInput;
 
+use std::cmp::min;
 use std::ops;
 
 pub use grammar::Grammar;
@@ -54,4 +55,54 @@ impl<T: TsInput> IntoTsInput for T {
 pub trait IntoTsInput {
     type TsInput: TsInput;
     fn into_ts_input(self) -> Self::TsInput;
+}
+
+// workaround for missing features in regex cursor/regex crate
+pub(crate) struct CursorSlice<T: regex_cursor::Cursor> {
+    cursor: T,
+    start: usize,
+    end: usize,
+}
+
+impl<T: regex_cursor::Cursor> CursorSlice<T> {
+    pub fn new(cursor: T, start: usize, end: usize) -> Self {
+        debug_assert!(start <= cursor.offset() + cursor.chunk().len());
+        debug_assert!(end >= cursor.offset());
+        Self { cursor, start, end }
+    }
+}
+
+impl<T: regex_cursor::Cursor> regex_cursor::Cursor for CursorSlice<T> {
+    #[inline]
+    fn chunk(&self) -> &[u8] {
+        let chunk = self.cursor.chunk();
+        let end = min(self.end - self.cursor.offset(), chunk.len());
+        &chunk[..end]
+    }
+
+    #[inline]
+    fn advance(&mut self) -> bool {
+        if self.end <= self.cursor.offset() + self.cursor.chunk().len() {
+            return false;
+        }
+        self.cursor.advance()
+    }
+
+    #[inline]
+    fn backtrack(&mut self) -> bool {
+        if self.start >= self.cursor.offset() {
+            return false;
+        }
+        self.cursor.backtrack()
+    }
+
+    #[inline]
+    fn total_bytes(&self) -> Option<usize> {
+        Some(self.end - self.start)
+    }
+
+    #[inline]
+    fn offset(&self) -> usize {
+        self.cursor.offset() - self.start
+    }
 }

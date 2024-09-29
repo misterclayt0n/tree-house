@@ -1,21 +1,17 @@
 use std::cell::RefCell;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::path::Path;
 
 use indexmap::{IndexMap, IndexSet};
-use indoc::indoc;
 use once_cell::unsync::OnceCell;
-use pretty_assertions::StrComparison;
-use ropey::Rope;
 use skidder::Repo;
 use tree_sitter::Grammar;
 
 use crate::config::{LanguageConfig, LanguageLoader};
-use crate::fixtures::roundtrip_fixture;
+use crate::fixtures::{check_highlighter_fixture, check_injection_fixture};
 use crate::highlighter::{Highlight, HighlightQuery};
 use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
-use crate::{Language, Syntax};
+use crate::Language;
 
 fn skidder_config() -> skidder::Config {
     skidder::Config {
@@ -188,12 +184,8 @@ impl LanguageLoader for TestLanguageLoader {
     }
 }
 
-fn fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
+fn highlight_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
     let path = Path::new("../fixtures").join(fixture);
-    let snapshot = fs::read_to_string(&path)
-        .unwrap_or_default()
-        .replace("\r\n", "\n");
-    let snapshot = snapshot.trim_end();
     let lang = match path
         .extension()
         .and_then(|it| it.to_str())
@@ -202,49 +194,40 @@ fn fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
         "rs" => loader.get("rust"),
         extension => unreachable!("unkown file type .{extension}"),
     };
-    let roundtrip = roundtrip_fixture(
+    check_highlighter_fixture(
+        path,
         "// ",
         lang,
         loader,
         |highlight| loader.test_theme.borrow()[highlight.0 as usize].clone(),
-        snapshot,
         |_| ..,
-    );
-    if snapshot != roundtrip.trim_end() {
-        if std::env::var_os("UPDATE_EXPECT").is_some_and(|it| it == "1") {
-            println!("\x1b[1m\x1b[92mupdating\x1b[0m: {}", path.display());
-            fs::write(path, roundtrip).unwrap();
-        } else {
-            println!(
-                "\n
-{}
+    )
+}
 
-\x1b[1m\x1b[91merror\x1b[97m: fixture test failed\x1b[0m
-   \x1b[1m\x1b[34m-->\x1b[0m {}
-
-You can update all fixtures by running:
-
-    env UPDATE_EXPECT=1 cargo test
-",
-                StrComparison::new(snapshot, &roundtrip.trim_end()),
-                path.display(),
-            );
-        }
-
-        std::panic::resume_unwind(Box::new(()));
-    }
-    pretty_assertions::assert_str_eq!(
-        snapshot,
-        roundtrip.trim_end(),
-        "fixture {} out of date, set UPDATE_EXPECT=1",
-        path.display()
-    );
+fn injection_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
+    let path = Path::new("../fixtures").join(fixture);
+    let lang = match path
+        .extension()
+        .and_then(|it| it.to_str())
+        .unwrap_or_default()
+    {
+        "rs" => loader.get("rust"),
+        extension => unreachable!("unkown file type .{extension}"),
+    };
+    check_injection_fixture(
+        path,
+        "// ",
+        lang,
+        loader,
+        |lang| loader.languages.get_index(lang.idx()).unwrap().0.clone(),
+        |_| ..,
+    )
 }
 
 #[test]
 fn highlight() {
     let loader = TestLanguageLoader::new();
-    fixture(&loader, "highlighter/hellow_world.rs");
+    highlight_fixture(&loader, "highlighter/hellow_world.rs");
 }
 
 #[test]
@@ -257,7 +240,7 @@ fn combined_injection() {
  (#set! injection.language "markdown")
  (#set! injection.combined))"#,
     );
-    fixture(&loader, "highlighter/rust_doc_comment.rs");
+    highlight_fixture(&loader, "highlighter/rust_doc_comment.rs");
 }
 
 #[test]
@@ -277,7 +260,8 @@ fn injection_in_child() {
  (#set! injection.combined))
 "#,
     );
-    fixture(&loader, "highlighter/rust_doc_comment.rs");
+    highlight_fixture(&loader, "highlighter/rust_doc_comment.rs");
+    injection_fixture(&loader, "injections/rust_doc_comment.rs");
 }
 
 #[test]
@@ -294,7 +278,7 @@ fn injection_precedance() {
  (#set! injection.language "comment")
  (#set! injection.include-children))"#,
     );
-    fixture(&loader, "highlighter/rust_doc_comment.rs");
+    highlight_fixture(&loader, "highlighter/rust_doc_comment.rs");
     loader.shadow_injections(
         "rust",
         r#"
@@ -306,5 +290,6 @@ fn injection_precedance() {
  (#set! injection.language "markdown")
  (#set! injection.combined))"#,
     );
-    fixture(&loader, "highlighter/rust_no_doc_comment.rs");
+    highlight_fixture(&loader, "highlighter/rust_no_doc_comment.rs");
+    injection_fixture(&loader, "injections/rust_no_doc_comment.rs");
 }

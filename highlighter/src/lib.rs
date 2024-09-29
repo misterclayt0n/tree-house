@@ -115,10 +115,8 @@ impl Syntax {
             root: Layer(root as u32),
             layers,
         };
-        let res = syntax.update(source, timeout, &[], loader).map(|_| syntax);
-        println!("{res:?}");
 
-        res
+        syntax.update(source, timeout, &[], loader).map(|_| syntax)
     }
 
     fn layer(&self, layer: Layer) -> &LayerData {
@@ -236,12 +234,19 @@ impl LayerData {
     /// Returns the injection range **within this layers** that contains `idx`.
     /// This function will not descend into nested injections
     pub fn injection_at_byte_idx(&self, idx: u32) -> Option<&Injection> {
+        self.injections_at_byte_idx(idx)
+            .next()
+            .filter(|injection| injection.range.end > idx)
+    }
+
+    /// Returns the injection ranges **within this layers** that contain
+    /// `idx` or start after idx. This function will not descend into nested
+    /// injections.
+    pub fn injections_at_byte_idx(&self, idx: u32) -> impl Iterator<Item = &Injection> {
         let i = self
             .injections
             .partition_point(|range| range.range.start < idx);
-        self.injections
-            .get(i)
-            .filter(|injection| injection.range.end > idx)
+        self.injections[i..].iter()
     }
 }
 

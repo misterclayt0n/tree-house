@@ -1,5 +1,5 @@
-   /// TODO **hello-world** 
-   /// **foo
+   // TODO **hello-world** 
+//    ┗━━┹─ info
    fn foo() {
 // ┡┛ ┡━┛┡┛ ╰─ punctuation.bracket
 // │  │  ╰─ punctuation.bracket

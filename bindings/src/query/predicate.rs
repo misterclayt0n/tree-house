@@ -113,8 +113,8 @@ impl TextPredicate {
             TextPredicateKind::MatchString(ref regex) => {
                 self.satisfied_helper(capture_nodes.map(|node| {
                     let range = node.syntax_node.byte_range();
-                    let input = regex_cursor::Input::new(input.cursor_at(range.start))
-                        .range(range.start as usize..range.end as usize);
+                    let mut input = regex_cursor::Input::new(input.cursor_at(range.start));
+                    input.slice(range.start as usize..range.end as usize);
                     regex.is_match(input)
                 }))
             }
@@ -181,7 +181,7 @@ impl Query {
 
                     let negated = matches!(predicate.name(), "not-match?" | "any-not-match?");
                     let match_all = matches!(predicate.name(), "match?" | "not-match?");
-                    let regex = match Regex::new(regex) {
+                    let regex = match Regex::builder().build(regex) {
                         Ok(regex) => regex,
                         Err(err) => bail!("invalid regex '{regex}', {err}"),
                     };

@@ -190,11 +190,10 @@ dependencies = [
  "cov-mark",
  "hashbrown",
  "indexmap",
- "indoc",
  "once_cell",
  "pretty_assertions",
  "regex",
- "regex-cursor",
+ "regex-cursor 0.1.4",
  "ropey",
  "skidder",
  "slab",
@@ -224,12 +223,6 @@ dependencies = [
  "portable-atomic",
  "unicode-width",
 ]
-
-[[package]]
-name = "indoc"
-version = "2.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
 
 [[package]]
 name = "instant"
@@ -360,6 +353,17 @@ name = "regex-cursor"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae4327b5fde3ae6fda0152128d3d59b95a5aad7be91c405869300091720f7169"
+dependencies = [
+ "log",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
+ "ropey",
+]
+
+[[package]]
+name = "regex-cursor"
+version = "0.1.5"
 dependencies = [
  "log",
  "memchr",
@@ -572,7 +576,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "libloading",
- "regex-cursor",
+ "regex-cursor 0.1.5",
  "ropey",
  "thiserror",
 ]
