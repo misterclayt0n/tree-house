@@ -70,7 +70,6 @@ fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
 
 #[derive(Debug)]
 struct TestLanguageLoader {
-    // this would be done with something like IndexMap normally but I don't want to pull that in for a test
     languages: IndexMap<String, Language>,
     lang_config: Box<[OnceCell<LanguageConfig>]>,
     overwrites: Box<[Overwrites]>,
@@ -82,6 +81,7 @@ impl TestLanguageLoader {
         let skidder_config = skidder_config();
         // skidder::fetch(&skidder_config, false).unwrap();
         let grammars = skidder::list_grammars(&skidder_config).unwrap();
+        assert!(!grammars.is_empty());
         let mut loader = TestLanguageLoader {
             lang_config: (0..grammars.len()).map(|_| OnceCell::new()).collect(),
             overwrites: vec![Overwrites::default(); grammars.len()].into_boxed_slice(),
