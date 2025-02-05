@@ -148,6 +148,7 @@ extern "C" {
     /// because it needs to iterate through all the children to compute the child's
     /// position.
     fn ts_tree_cursor_goto_last_child(self_: *mut TreeCursorRaw) -> bool;
+    /*
     /// Move the cursor to the node that is the nth descendant of
     /// the original node that the cursor was constructed with, where
     /// zero represents the original node itself.
@@ -163,5 +164,6 @@ extern "C" {
     /// This returns the index of the child node if one was found, and returns -1
     /// if no such child was found.
     fn ts_tree_cursor_goto_first_child_for_byte(self_: *mut TreeCursorRaw, goal_byte: u32) -> i64;
+    */
     fn ts_tree_cursor_copy(cursor: *const TreeCursorRaw) -> TreeCursorRaw;
 }

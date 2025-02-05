@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::cmp::Reverse;
-use std::collections::VecDeque;
 use std::iter::{self, Peekable};
 use std::mem::take;
 use std::path::Path;

@@ -1,10 +1,8 @@
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 
 use ::skidder::list_grammars;
-use anyhow::{Context, Result};
-use skidder::Metadata;
+use anyhow::Result;
 
 mod build;
 mod flags;

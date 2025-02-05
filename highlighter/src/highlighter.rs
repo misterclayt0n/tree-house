@@ -1,5 +1,4 @@
-use std::cmp::min;
-use std::mem::{replace, take};
+use std::mem::replace;
 use std::ops::RangeBounds;
 use std::path::Path;
 use std::slice;

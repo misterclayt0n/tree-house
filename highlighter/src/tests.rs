@@ -108,12 +108,16 @@ impl TestLanguageLoader {
         self.languages[name]
     }
 
+    // TODO: remove on first use.
+    #[allow(dead_code)]
     fn overwrite_injections(&mut self, lang: &str, content: String) {
         let lang = self.get(lang);
         self.overwrites[lang.idx()].injections = Some(content);
         self.lang_config[lang.idx()] = OnceCell::new();
     }
 
+    // TODO: remove on first use.
+    #[allow(dead_code)]
     fn overwrite_highlights(&mut self, lang: &str, content: String) {
         let lang = self.get(lang);
         self.overwrites[lang.idx()].highlights = Some(content);
@@ -140,6 +144,8 @@ impl TestLanguageLoader {
         self.lang_config[lang.idx()] = OnceCell::new();
     }
 
+    // TODO: remove on first use.
+    #[allow(dead_code)]
     fn shadow_highlights(&mut self, lang: &str, content: &str) {
         let lang = self.get(lang);
         let skidder_config = skidder_config();
