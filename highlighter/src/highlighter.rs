@@ -229,7 +229,7 @@ impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
             && self
                 .active_highlights
                 .last()
-                .map_or(false, |prev_node| prev_node.end == node.byte_range.end)
+                .is_some_and(|prev_node| prev_node.end == node.byte_range.end)
         {
             if self.active_config.new_precedence {
                 self.active_highlights.pop();
