@@ -11,15 +11,15 @@ use std::fmt::Write;
 #[derive(Debug)]
 pub struct LanguageConfig {
     pub grammar: Grammar,
-    pub highight_query: HighlightQuery,
+    pub highlight_query: HighlightQuery,
     pub injections_query: InjectionsQuery,
-    pub new_precedance: bool,
+    pub new_precedence: bool,
 }
 
 static INHERITS_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r";+\s*inherits\s*:?\s*([a-z_,()-]+)\s*").unwrap());
 
-/// reads a query by invoking `read_query_text`, handeles any `inherits` directives
+/// reads a query by invoking `read_query_text`, handles any `inherits` directives
 pub fn read_query(
     language: &str,
     filename: &str,

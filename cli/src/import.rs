@@ -121,7 +121,7 @@ impl Import {
                 let license_file_content = fs::read_to_string(&license_file)
                     .with_context(|| format!("failed to read {}", license_file.display()))?;
                 fs::write(dst_path.join("LICENSE"), &license_file_content).with_context(|| {
-                    format!("failed to wirte {}", dst_path.join("LICENSE").display())
+                    format!("failed to write {}", dst_path.join("LICENSE").display())
                 })?;
                 license = LICENSE_SEARCH
                     .iter()
@@ -147,10 +147,10 @@ impl Import {
                     fs::read_to_string(src_path.join("package.json"))
                         .ok()
                         .and_then(|json| serde_json::from_str(&json).ok());
-                if let Some(package_metada) = package_metadata {
+                if let Some(package_metadata) = package_metadata {
                     match &license {
-                        Some(license) if license != &package_metada.license => eprintln!("warning: license in package identifier differs from detected license {license} != {}", &package_metada.license),
-                        _ => license = Some(package_metada.license),
+                        Some(license) if license != &package_metadata.license => eprintln!("warning: license in package identifier differs from detected license {license} != {}", &package_metadata.license),
+                        _ => license = Some(package_metadata.license),
                     }
                 }
 

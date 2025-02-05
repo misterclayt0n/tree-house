@@ -15,7 +15,7 @@ thread_local! {
     static CURSOR_CACHE: UnsafeCell<Vec<InactiveQueryCursor>> = UnsafeCell::new(Vec::with_capacity(8));
 }
 
-/// SAFETY: must not call itself recuresively
+/// SAFETY: must not call itself recursively
 unsafe fn with_cache<T>(f: impl FnOnce(&mut Vec<InactiveQueryCursor>) -> T) -> T {
     CURSOR_CACHE.with(|cache| f(&mut *cache.get()))
 }
@@ -51,7 +51,7 @@ impl<'tree, I: TsInput> QueryCursor<'_, 'tree, I> {
                 .query
                 .pattern_text_predicates(query_match.pattern_index)
                 .iter()
-                .all(|predicate| predicate.satsified(&mut self.input, matched_nodes, self.query));
+                .all(|predicate| predicate.satisfied(&mut self.input, matched_nodes, self.query));
             if satisfies_predicates {
                 let res = QueryMatch {
                     id: query_match.id,
@@ -90,7 +90,7 @@ impl<'tree, I: TsInput> QueryCursor<'_, 'tree, I> {
                 .query
                 .pattern_text_predicates(query_match.pattern_index)
                 .iter()
-                .all(|predicate| predicate.satsified(&mut self.input, matched_nodes, self.query));
+                .all(|predicate| predicate.satisfied(&mut self.input, matched_nodes, self.query));
             if satisfies_predicates {
                 let res = QueryMatch {
                     id: query_match.id,
@@ -299,6 +299,7 @@ extern "C" {
     /// for matches. To use the query cursor, first call [`ts_query_cursor_exec`]
     /// to start running a given query on a given syntax node. Then, there are
     /// two options for consuming the results of the query:
+    ///
     /// 1. Repeatedly call [`ts_query_cursor_next_match`] to iterate over all of the
     ///    *matches* in the order that they were found. Each match contains the
     ///    index of the pattern that matched, and an array of captures. Because
@@ -308,10 +309,11 @@ extern "C" {
     ///    individual *captures* in the order that they appear. This is useful if
     ///    don't care about which pattern matched, and just want a single ordered
     ///    sequence of captures.
+    ///
     /// If you don't care about consuming all of the results, you can stop calling
     /// [`ts_query_cursor_next_match`] or [`ts_query_cursor_next_capture`] at any point.
-    ///  You can then start executing another query on another node by calling
-    ///  [`ts_query_cursor_exec`] again."]
+    /// You can then start executing another query on another node by calling
+    /// [`ts_query_cursor_exec`] again."]
     fn ts_query_cursor_new() -> *mut QueryCursorData;
 
     /// Start running a given query on a given node.

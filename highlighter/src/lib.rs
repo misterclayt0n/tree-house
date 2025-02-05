@@ -29,8 +29,8 @@ pub mod query_iter;
 pub mod text_object;
 // mod tree_cursor;
 
-/// A layer represent a single a single syntax tree that reprsents (part of)
-/// a file parsed with a tree-sitter grammar. See [`Syntax`]
+/// A layer represent a single a single syntax tree that represents (part of)
+/// a file parsed with a tree-sitter grammar. See [`Syntax`].
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct Layer(u32);
 
@@ -53,16 +53,16 @@ impl Language {
     }
 }
 
-/// The Tree siitter syntax tree for a single language.
+/// The Tree sitter syntax tree for a single language.
 ///
-/// This is really multipe (nested) different syntax trees due to tree sitter
+/// This is really multiple (nested) different syntax trees due to tree sitter
 /// injections. A single syntax tree/parser is called layer. Each layer
 /// is parsed as a single "file" by tree sitter. There can be multiple layers
 /// for the same language. A layer corresponds to one of three things:
 /// * the root layer
-/// * a singular injection limited to a single node in it's parent layer
+/// * a singular injection limited to a single node in its parent layer
 /// * Multiple injections (multiple disjoint nodes in parent layer) that are
-/// parsed as tough they are a single uninterrupted file.
+///   parsed as though they are a single uninterrupted file.
 ///
 /// An injection always refer to a single node into which another layer is
 /// injected. As injections only correspond to syntax tree nodes injections in
@@ -77,8 +77,8 @@ impl Language {
 ///
 /// In this case Sibling B really spans across a "GAP" in layer2. While the syntax
 /// node can not be split up by tree sitter directly, we can treat Sibling B as two
-/// seperate injections. That is done while parsing/running the query capture. As
-/// a result the injections from a tree. Note that such other queries must account for
+/// separate injections. That is done while parsing/running the query capture. As
+/// a result the injections form a tree. Note that such other queries must account for
 /// such multi injection nodes.
 #[derive(Debug)]
 pub struct Syntax {
@@ -205,7 +205,7 @@ pub struct LayerData {
 
 /// This PartialEq implementation only checks if that
 /// two layers are theoretically identical (meaning they highlight the same text range with the same language).
-/// It does not check whether the layers have the same internal treesitter
+/// It does not check whether the layers have the same internal tree-sitter
 /// state.
 impl PartialEq for LayerData {
     fn eq(&self, other: &Self) -> bool {
@@ -271,7 +271,7 @@ fn byte_range_to_str(range: Range, source: RopeSlice) -> Cow<str> {
 ///
 /// Old tree sitter versions used a limit of 32 by default until this limit was removed in version `0.19.5` (must now be set manually).
 /// However, this causes performance issues for medium to large files.
-/// In helix, this problem caused treesitter motions to take multiple seconds to complete in medium-sized rust files (3k loc).
+/// In Helix, this problem caused tree-sitter motions to take multiple seconds to complete in medium-sized rust files (3k loc).
 ///
 ///
 /// Neovim also encountered this problem and reintroduced this limit after it was removed upstream
@@ -285,5 +285,5 @@ fn byte_range_to_str(range: Range, source: RopeSlice) -> Cow<str> {
 pub const TREE_SITTER_MATCH_LIMIT: u32 = 256;
 
 // use 32 bit ranges since TS doesn't support files larger than 2GiB anyway
-// and it allows us to save a lot memory/improve cache efficency
+// and it allows us to save a lot memory/improve cache efficiency
 type Range = std::ops::Range<u32>;

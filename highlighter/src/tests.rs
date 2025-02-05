@@ -34,11 +34,11 @@ struct Overwrites {
 fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
     let skidder_config = skidder_config();
     let grammar_dir = skidder_config.grammar_dir(grammar).unwrap();
-    let new_precedance = skidder::use_new_precedance(&skidder_config, grammar).unwrap();
+    let new_precedence = skidder::use_new_precedence(&skidder_config, grammar).unwrap();
     let parser_path = skidder::build_grammar(&skidder_config, grammar, false).unwrap();
     let grammar = unsafe { Grammar::new(grammar, &parser_path).unwrap() };
     let highlights_query_path = grammar_dir.join("highlights.scm");
-    let highight_query = HighlightQuery::new(
+    let highlight_query = HighlightQuery::new(
         grammar,
         &highlights_query_path,
         &overwrites
@@ -62,9 +62,9 @@ fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
     .unwrap();
     LanguageConfig {
         grammar,
-        highight_query,
+        highlight_query,
         injections_query,
-        new_precedance,
+        new_precedence,
     }
 }
 
@@ -123,11 +123,11 @@ impl TestLanguageLoader {
         let lang = self.get(lang);
         let skidder_config = skidder_config();
         let grammar = self.languages.get_index(lang.idx()).unwrap().0;
-        let new_precedance = skidder::use_new_precedance(&skidder_config, grammar).unwrap();
+        let new_precedence = skidder::use_new_precedence(&skidder_config, grammar).unwrap();
         let grammar_dir = skidder_config.grammar_dir(grammar).unwrap();
         let mut injections =
             fs::read_to_string(grammar_dir.join("injections.scm")).unwrap_or_default();
-        if new_precedance {
+        if new_precedence {
             injections.push('\n');
             injections.push_str(content)
         } else {
@@ -144,10 +144,10 @@ impl TestLanguageLoader {
         let lang = self.get(lang);
         let skidder_config = skidder_config();
         let grammar = self.languages.get_index(lang.idx()).unwrap().0;
-        let new_precedance = skidder::use_new_precedance(&skidder_config, grammar).unwrap();
+        let new_precedence = skidder::use_new_precedence(&skidder_config, grammar).unwrap();
         let grammar_dir = skidder_config.grammar_dir(grammar).unwrap();
         let mut highlights = fs::read_to_string(grammar_dir.join("highlights.scm")).unwrap();
-        if new_precedance {
+        if new_precedence {
             highlights.push('\n');
             highlights.push_str(content)
         } else {
@@ -177,7 +177,7 @@ impl LanguageLoader for TestLanguageLoader {
             );
             let mut theme = self.test_theme.borrow_mut();
             config
-                .highight_query
+                .highlight_query
                 .configure(|scope| Highlight(theme.insert_full(scope.to_owned()).0 as u32));
             config
         })
@@ -192,7 +192,7 @@ fn highlight_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
         .unwrap_or_default()
     {
         "rs" => loader.get("rust"),
-        extension => unreachable!("unkown file type .{extension}"),
+        extension => unreachable!("unknown file type .{extension}"),
     };
     check_highlighter_fixture(
         path,
@@ -212,7 +212,7 @@ fn injection_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
         .unwrap_or_default()
     {
         "rs" => loader.get("rust"),
-        extension => unreachable!("unkown file type .{extension}"),
+        extension => unreachable!("unknown file type .{extension}"),
     };
     check_injection_fixture(
         path,
@@ -227,7 +227,7 @@ fn injection_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
 #[test]
 fn highlight() {
     let loader = TestLanguageLoader::new();
-    highlight_fixture(&loader, "highlighter/hellow_world.rs");
+    highlight_fixture(&loader, "highlighter/hello_world.rs");
 }
 
 #[test]
@@ -246,9 +246,9 @@ fn combined_injection() {
 #[test]
 fn injection_in_child() {
     let mut loader = TestLanguageLoader::new();
-    // here doc_comment is a child of line_comment which has higher precedance
+    // here doc_comment is a child of line_comment which has higher precedence
     // however since it doesn't include children the doc_comment injection is
-    // still active here. This could probalby use a more realworld usecase (maybe nix?)
+    // still active here. This could probably use a more real world use case (maybe nix?)
     loader.shadow_injections(
         "rust",
         r#"
@@ -265,7 +265,7 @@ fn injection_in_child() {
 }
 
 #[test]
-fn injection_precedance() {
+fn injection_precedence() {
     let mut loader = TestLanguageLoader::new();
     loader.shadow_injections(
         "rust",

@@ -8,7 +8,7 @@ use skidder::Metadata;
 
 mod build;
 mod flags;
-mod genrate_parser;
+mod generate_parser;
 mod import;
 mod init;
 mod load;

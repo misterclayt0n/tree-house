@@ -213,9 +213,9 @@ impl InjectionsQuery {
     /// Executes the query on the given input and return an iterator of
     /// injection ranges together with their injection properties
     ///
-    /// The ranges yielded by the iterator have an asecnding start range.
+    /// The ranges yielded by the iterator have an ascending start range.
     /// The ranges do not overlap exactly (matches of the exact same node are
-    /// resolved with normal precedance rules). However, ranges can be nested.
+    /// resolved with normal precedence rules). However, ranges can be nested.
     /// For example:
     ///
     /// ``` no-compile
@@ -223,12 +223,12 @@ impl InjectionsQuery {
     /// |   range 1  |
     /// ```
     /// is possible and will always result in iteration order [range1, range2].
-    /// This case should be handeled by the calling function
+    /// This case should be handled by the calling function
     fn execute<'a>(
         &'a self,
         node: &SyntaxTreeNode<'a>,
         source: RopeSlice<'a>,
-        new_precedance: bool,
+        new_precedence: bool,
         loader: &'a impl LanguageLoader,
     ) -> impl Iterator<Item = InjectionQueryMatch> + 'a {
         let mut cursor = InactiveQueryCursor::new();
@@ -256,7 +256,7 @@ impl InjectionsQuery {
         });
         let mut buf = Vec::new();
         let mut iter = iter.peekable();
-        // handle identical/overlapping matches to correctly account for precedance
+        // handle identical/overlapping matches to correctly account for precedence
         iter::from_fn(move || {
             if let Some(mat) = buf.pop() {
                 return Some(mat);
@@ -275,7 +275,7 @@ impl InjectionsQuery {
                         fast_return = false;
                         break;
                     }
-                    if new_precedance {
+                    if new_precedence {
                         res = overlap;
                     }
                 }
@@ -285,7 +285,7 @@ impl InjectionsQuery {
             }
 
             // we if can't use the fastpath we accumulate all overlapping matches
-            // and then sort them accordin to presedance rules...
+            // and then sort them according to precedence rules...
             while let Some(overlap) = iter.next_if(|mat| mat.node.end_byte() <= res.node.end_byte())
             {
                 buf.push(overlap)
@@ -294,7 +294,7 @@ impl InjectionsQuery {
                 return Some(res);
             }
             buf.push(res);
-            if new_precedance {
+            if new_precedence {
                 buf.sort_unstable_by_key(|mat| (mat.pattern, Reverse(mat.node.start_byte())))
             } else {
                 buf.sort_unstable_by_key(|mat| {
@@ -319,7 +319,7 @@ impl Syntax {
         let layer_data = &mut self.layer_mut(layer);
         let LanguageConfig {
             ref injections_query,
-            new_precedance,
+            new_precedence,
             ..
         } = *loader.get_config(layer_data.language);
         if injections_query.injection_content_capture.is_none() {
@@ -333,7 +333,7 @@ impl Syntax {
         let mut old_injections = take(&mut layer_data.injections).into_iter().peekable();
 
         let injection_query =
-            injections_query.execute(&parse_tree.root_node(), source, new_precedance, loader);
+            injections_query.execute(&parse_tree.root_node(), source, new_precedence, loader);
 
         let mut combined_injections: HashMap<InjectionScope, Layer> = HashMap::with_capacity(32);
         for mat in injection_query {
@@ -342,12 +342,12 @@ impl Syntax {
             // if a parent node already has an injection ignore this injection
             // in theory the first condition would be enough to detect that
             // however in case the parent node does not include children it
-            // is possible that one of these children is another seperate
-            // injections. In these cases we cannot skip the injection
+            // is possible that one of these children is another separate
+            // injection. In these cases we cannot skip the injection
             //
-            // also the presedance sorting (and rane intersection) means that
+            // also the precedence sorting (and rare intersection) means that
             // overlapping injections may be sorted not by position but by
-            // presedance (higest presedance first). the code here ensures
+            // precedence (highest precedence first). the code here ensures
             // that injections get sorted to the correct position
             if let Some(last_injection) = injections
                 .last()

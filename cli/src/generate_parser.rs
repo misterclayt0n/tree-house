@@ -20,7 +20,7 @@ impl RegenerateParser {
         };
         let temp_dir =
             TempDir::new().context("failed to create temporary directory for decompression")?;
-        // create dummy file to prevent TS cli from creating a full sceleton
+        // create dummy file to prevent TS CLI from creating a full skeleton
         File::create(temp_dir.path().join("grammar.js"))
             .context("failed to create temporary directory for decompression")?;
         let mut failed = Vec::new();

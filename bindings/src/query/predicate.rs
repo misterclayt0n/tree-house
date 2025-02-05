@@ -81,7 +81,7 @@ impl TextPredicate {
         }
     }
 
-    pub fn satsified<I: TsInput>(
+    pub fn satisfied<I: TsInput>(
         &self,
         input: &mut I,
         matched_nodes: &[MatchedNode],
@@ -230,7 +230,7 @@ impl Query {
                     });
                 }
 
-                // is and is-not are better handeled as custom predicates since interpreting is context dependent
+                // is and is-not are better handled as custom predicates since interpreting is context dependent
                 // "is?" => property_predicates.push((QueryProperty::parse(&predicate), false)),
                 // "is-not?" => property_predicates.push((QueryProperty::parse(&predicate), true)),
                 _ => custom_predicate(pattern, UserPredicate::Other(predicate))?,
@@ -375,7 +375,7 @@ impl Error for InvalidPredicateError {}
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 // warns about never being constructed but it's constructed by C code
-// and wrwitten into a mutable reference
+// and written into a mutable reference
 #[allow(dead_code)]
 enum PredicateStepKind {
     Done = 0,
@@ -406,15 +406,17 @@ extern "C" {
     /// Get all of the predicates for the given pattern in the query. The
     /// predicates are represented as a single array of steps. There are three
     /// types of steps in this array, which correspond to the three legal values
-    /// for the `type` field: - `TSQueryPredicateStepTypeCapture` - Steps with
-    /// this type represent names    of captures. Their `value_id` can be used
-    /// with the   [`ts_query_capture_name_for_id`] function to obtain the name
-    /// of the capture. - `TSQueryPredicateStepTypeString` - Steps with this
-    /// type represent literal    strings. Their `value_id` can be used with the
-    /// [`ts_query_string_value_for_id`] function to obtain their string value.
-    /// - `TSQueryPredicateStepTypeDone` - Steps with this type are *sentinels*
-    /// that represent the end of an individual predicate. If a pattern has two
-    /// predicates, then there will be two steps with this `type` in the array.
+    /// for the `type` field:
+    ///
+    /// - `TSQueryPredicateStepTypeCapture` - Steps with this type represent names of captures.
+    ///   Their `value_id` can be used with the [`ts_query_capture_name_for_id`] function to
+    ///   obtain the name of the capture.
+    /// - `TSQueryPredicateStepTypeString` - Steps with this type represent literal strings.
+    ///   Their `value_id` can be used with the [`ts_query_string_value_for_id`] function to
+    ///   obtain their string value.
+    /// - `TSQueryPredicateStepTypeDone` - Steps with this type are *sentinels* that represent the
+    ///   end of an individual predicate. If a pattern has two predicates, then there will be two
+    ///   steps with this `type` in the array.
     fn ts_query_predicates_for_pattern(
         query: NonNull<QueryData>,
         pattern_index: u32,

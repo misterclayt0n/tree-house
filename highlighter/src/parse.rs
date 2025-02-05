@@ -16,7 +16,7 @@ impl Syntax {
         loader: &impl LanguageLoader,
     ) -> Result<(), Error> {
         // size limit of 512MiB, TS just cannot handle files this big (too
-        // slow). Furthermore, TS uses 32 (signed) bit indecies so this limit
+        // slow). Furthermore, TS uses 32 (signed) bit indices so this limit
         // must never be raised above 2GiB
         if source.len_bytes() >= 512 * 1024 * 1024 {
             return Err(Error::ExceededMaximumSize);
@@ -27,7 +27,7 @@ impl Syntax {
         queue.push(self.root);
 
         let mut parser = Parser::new();
-        parser.set_timeout(timeout); // half a second is pretty generours
+        parser.set_timeout(timeout); // half a second is pretty generous
         let mut cursor = InactiveQueryCursor::new();
         // TODO: might need to set cursor range
         cursor.set_byte_range(0..u32::MAX);

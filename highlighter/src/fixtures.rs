@@ -9,7 +9,7 @@ use tree_sitter::Query;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::config::LanguageLoader;
-use crate::highlighter::{HighlighEvent, Highlight, Highligther};
+use crate::highlighter::{Highlight, HighlightEvent, Highlighter};
 use crate::query_iter::{QueryIter, QueryIterEvent};
 use crate::{Language, Range, Syntax};
 
@@ -192,7 +192,7 @@ pub fn highlighter_fixture(
         Bound::Unbounded => src.len_bytes(),
     };
     let ident = " ".repeat(comment_prefix.width());
-    let mut highlighter = Highligther::new(syntax, src, &loader, start as u32..);
+    let mut highlighter = Highlighter::new(syntax, src, &loader, start as u32..);
     let mut pos = highlighter.next_event_offset();
     let mut highlight_stack = Vec::new();
     let mut line_idx = src.byte_to_line(pos as usize);
@@ -208,11 +208,11 @@ pub fn highlighter_fixture(
     let mut errors = String::new();
     while pos < end as u32 {
         let new_highlights = match highlighter.advance() {
-            HighlighEvent::RefreshHiglights(highlights) => {
+            HighlightEvent::RefreshHighlights(highlights) => {
                 highlight_stack.clear();
                 highlights
             }
-            HighlighEvent::PushHighlights(highlights) => highlights,
+            HighlightEvent::PushHighlights(highlights) => highlights,
         };
         highlight_stack.extend(new_highlights.map(&get_highlight_name));
         let mut start = pos;
@@ -330,8 +330,8 @@ pub fn injections_fixture(
     };
     let ident = " ".repeat(comment_prefix.width());
     let lang = syntax.layer(syntax.root).language;
-    let languag_config = loader.get_config(lang);
-    let query = Query::new(languag_config.grammar, "", "", |_, _| unreachable!()).unwrap();
+    let language_config = loader.get_config(lang);
+    let query = Query::new(language_config.grammar, "", "", |_, _| unreachable!()).unwrap();
     let mut query_iter = QueryIter::<_, ()>::new(syntax, src, |_| &query, start as u32..);
     let event = query_iter.next();
     let mut injection_stack = Vec::new();

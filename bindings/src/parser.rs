@@ -65,7 +65,7 @@ impl Parser {
     /// whole. You can also pass multiple disjoint ranges.
     ///
     /// `ranges` must be non-overlapping and sorted.
-    pub fn set_included_ranges(&mut self, ranges: &[Range]) -> Result<(), InvalidRangesErrror> {
+    pub fn set_included_ranges(&mut self, ranges: &[Range]) -> Result<(), InvalidRangesError> {
         // TODO: save some memory by only storing byte ranges and converting them to TS ranges in an
         // internal buffer here. Points are not used by TS. Alternatively we can path the TS C code
         // to accept a simple pair (struct with two fields) of byte positions here instead of a full
@@ -76,7 +76,7 @@ impl Parser {
         if success {
             Ok(())
         } else {
-            Err(InvalidRangesErrror)
+            Err(InvalidRangesError)
         }
     }
 
@@ -144,14 +144,14 @@ impl Drop for Parser {
 /// An error that occurred when trying to assign an incompatible [`Grammar`] to
 /// a [`Parser`].
 #[derive(Debug, PartialEq, Eq)]
-pub struct InvalidRangesErrror;
+pub struct InvalidRangesError;
 
-impl fmt::Display for InvalidRangesErrror {
+impl fmt::Display for InvalidRangesError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "include ranges overlap or are not sorted",)
     }
 }
-impl std::error::Error for InvalidRangesErrror {}
+impl std::error::Error for InvalidRangesError {}
 
 type TreeSitterReadFn = unsafe extern "C" fn(
     payload: NonNull<c_void>,

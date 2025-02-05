@@ -5,11 +5,11 @@ xflags::xflags! {
 
     cmd skidder {
         cmd import {
-            /// Wether to import queries
+            /// Whether to import queries
             optional --import-queries
-            /// Wether to (re)generate metadata
+            /// Whether to (re)generate metadata
             optional --metadata
-            /// The repository/diretocy where repos are copied into.
+            /// The repository/directory where repos are copied into.
             /// Defaults to the current working directory
             optional -r,--repo repo: PathBuf
             /// The path of the grammars to import. The name of the directory

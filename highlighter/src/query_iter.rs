@@ -45,7 +45,7 @@ struct ActiveLayer<'a, S> {
 }
 
 // data only needed when entering and exiting injections
-// seperate struck to keep the QueryIter reasonably small
+// separate struck to keep the QueryIter reasonably small
 struct QueryIterLayerManager<'a, Loader, S> {
     range: Range,
     loader: Loader,

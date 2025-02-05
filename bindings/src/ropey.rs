@@ -39,8 +39,8 @@ impl<'a> TsInput for RopeTsInput<'a> {
             "parser offset out of bounds: {offset} > {}",
             self.src.len_bytes()
         );
-        // this cursor is optimized for contigous reads which are by far the most common during parsing
-        // very far jumps (like injections at the other end of the document) are handelde
+        // this cursor is optimized for contiguous reads which are by far the most common during parsing
+        // very far jumps (like injections at the other end of the document) are handled
         // by starting a new cursor (new chunks iterator)
         if offset < self.cursor.offset() || offset - self.cursor.offset() > 4906 {
             self.cursor = regex_cursor::RopeyCursor::at(self.src, offset);

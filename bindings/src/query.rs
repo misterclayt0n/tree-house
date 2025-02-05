@@ -312,7 +312,7 @@ impl QueryStr {
 #[derive(Debug, PartialEq, Eq)]
 pub struct ParserErrorLocation {
     pub path: PathBuf,
-    /// at which line the error occured
+    /// at which line the error occurred
     pub line: u32,
     /// at which codepoints/columns the errors starts in the line
     pub column: u32,

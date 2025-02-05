@@ -2,7 +2,7 @@
 name = "skidder-cli"
 version = "0.1.0"
 edition = "2021"
-description = "A package mangager for tree-sitter"
+description = "A package manager for tree-sitter"
 authors = ["Pascal Kuthe <pascalkuthe@pm.me>"]
 license = "MPL-2.0"
 repository = "https://github.com/helix-editor/sappling"

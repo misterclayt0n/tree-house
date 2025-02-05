@@ -27,7 +27,7 @@ impl std::fmt::Debug for Grammar {
 }
 
 impl Grammar {
-    /// Loads a shared library containg a tree sitter grammar with name `name`
+    /// Loads a shared library containing a tree sitter grammar with name `name`
     // from `library_path`.
     ///
     /// # Safety

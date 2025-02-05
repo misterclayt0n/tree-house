@@ -35,7 +35,7 @@ impl HighlightQuery {
         })
     }
 
-    /// Configures the list of recognized highlight nameus.
+    /// Configures the list of recognized highlight names.
     ///
     /// Tree-sitter syntax-highlighting queries specify highlights in the form of dot-separated
     /// highlight names like `punctuation.bracket` and `function.method.builtin`. Consumers of
@@ -49,7 +49,7 @@ impl HighlightQuery {
     /// then `Highlight::NONE` should be returned.
     ///
     /// When highlighting, results are returned as `Highlight` values, configured by this function.
-    /// The meaning of these indecies is up to the user of the implementation. The highlighter
+    /// The meaning of these indices is up to the user of the implementation. The highlighter
     /// treats the indices as entirely opaque.
     pub fn configure(&mut self, mut f: impl FnMut(&str) -> Highlight) {
         self.highlight_indices = self
@@ -80,8 +80,8 @@ pub struct LayerData {
     dormant_highlights: Vec<HighlightedNode>,
 }
 
-pub struct Highligther<'a, Loader: LanguageLoader> {
-    query: QueryIter<'a, HighlighQueryLoader<&'a Loader>, LayerData>,
+pub struct Highlighter<'a, Loader: LanguageLoader> {
+    query: QueryIter<'a, HighlightQueryLoader<&'a Loader>, LayerData>,
     next_query_event: Option<QueryIterEvent<LayerData>>,
     active_highlights: Vec<HighlightedNode>,
     next_highlight_end: u32,
@@ -103,21 +103,21 @@ impl<'a> Iterator for HighlightList<'a> {
     }
 }
 
-pub enum HighlighEvent<'a> {
-    RefreshHiglights(HighlightList<'a>),
+pub enum HighlightEvent<'a> {
+    RefreshHighlights(HighlightList<'a>),
     PushHighlights(HighlightList<'a>),
 }
 
-impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
+impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
     pub fn new(
         syntax: &'a Syntax,
         src: RopeSlice<'a>,
         loader: &'a Loader,
         range: impl RangeBounds<u32>,
     ) -> Self {
-        let mut query = QueryIter::new(syntax, src, HighlighQueryLoader(loader), range);
+        let mut query = QueryIter::new(syntax, src, HighlightQueryLoader(loader), range);
         let active_language = query.current_language();
-        let mut res = Highligther {
+        let mut res = Highlighter {
             active_config: query.loader().0.get_config(active_language),
             next_query_event: None,
             active_highlights: Vec::new(),
@@ -137,14 +137,14 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
         self.next_highlight_start.min(self.next_highlight_end)
     }
 
-    pub fn advance(&mut self) -> HighlighEvent<'_> {
+    pub fn advance(&mut self) -> HighlightEvent<'_> {
         let mut refresh = false;
         let prev_stack_size = self.active_highlights.len();
 
         let pos = self.next_event_offset();
         if self.next_highlight_end == pos {
             // self.process_injection_ends();
-            self.process_higlight_end(pos);
+            self.process_highlight_end(pos);
             refresh = true;
         }
 
@@ -157,10 +157,10 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
                 QueryIterEvent::EnterInjection(_) => self.enter_injection(),
                 QueryIterEvent::Match(node) => self.start_highlight(node, &mut first_highlight),
                 QueryIterEvent::ExitInjection { injection, state } => {
-                    // state is returned if the layer is finifhed, if it isn't we have
-                    // a combined injection and need to deactive its highlights
+                    // state is returned if the layer is finished, if it isn't we have
+                    // a combined injection and need to deactivate its highlights
                     if state.is_none() {
-                        self.deactive_layer(injection.layer);
+                        self.deactivate_layer(injection.layer);
                         refresh = true;
                     }
                     let active_language = self.query.current_language();
@@ -174,9 +174,9 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
             .map_or(u32::MAX, |node| node.end);
 
         if refresh {
-            HighlighEvent::RefreshHiglights(HighlightList(self.active_highlights.iter()))
+            HighlightEvent::RefreshHighlights(HighlightList(self.active_highlights.iter()))
         } else {
-            HighlighEvent::PushHighlights(HighlightList(
+            HighlightEvent::PushHighlights(HighlightList(
                 self.active_highlights[prev_stack_size..].iter(),
             ))
         }
@@ -191,7 +191,7 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
         event
     }
 
-    fn process_higlight_end(&mut self, pos: u32) {
+    fn process_highlight_end(&mut self, pos: u32) {
         let i = self
             .active_highlights
             .iter()
@@ -208,7 +208,7 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
         self.active_highlights.append(&mut data.dormant_highlights);
     }
 
-    fn deactive_layer(&mut self, layer: Layer) {
+    fn deactivate_layer(&mut self, layer: Layer) {
         let LayerData {
             mut parent_highlights,
             ref mut dormant_highlights,
@@ -216,7 +216,7 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
         } = *self.query.layer_state(layer);
         parent_highlights = parent_highlights.min(self.active_highlights.len());
         dormant_highlights.extend(self.active_highlights.drain(parent_highlights..));
-        self.process_higlight_end(self.next_highlight_start);
+        self.process_highlight_end(self.next_highlight_start);
     }
 
     fn start_highlight(&mut self, node: MatchedNode, first_highlight: &mut bool) {
@@ -225,20 +225,20 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
         }
 
         // if there are multiple matches for the exact same node
-        // only use one of the (the last with new/nvim precedance)
+        // only use one of the (the last with new/nvim precedence)
         if !*first_highlight
             && self
                 .active_highlights
                 .last()
                 .map_or(false, |prev_node| prev_node.end == node.byte_range.end)
         {
-            if self.active_config.new_precedance {
+            if self.active_config.new_precedence {
                 self.active_highlights.pop();
             } else {
                 return;
             }
         }
-        let highlight = self.active_config.highight_query.highlight_indices[node.capture.idx()];
+        let highlight = self.active_config.highlight_query.highlight_indices[node.capture.idx()];
         if highlight != Highlight::NONE {
             self.active_highlights.push(HighlightedNode {
                 end: node.byte_range.end,
@@ -249,10 +249,10 @@ impl<'a, Loader: LanguageLoader> Highligther<'a, Loader> {
     }
 }
 
-pub(crate) struct HighlighQueryLoader<T>(T);
+pub(crate) struct HighlightQueryLoader<T>(T);
 
-impl<'a, T: LanguageLoader> QueryLoader<'a> for HighlighQueryLoader<&'a T> {
+impl<'a, T: LanguageLoader> QueryLoader<'a> for HighlightQueryLoader<&'a T> {
     fn get_query(&mut self, lang: Language) -> &'a Query {
-        &self.0.get_config(lang).highight_query.query
+        &self.0.get_config(lang).highlight_query.query
     }
 }

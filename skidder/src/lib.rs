@@ -262,7 +262,7 @@ pub fn list_grammars(config: &Config) -> Result<Vec<PathBuf>> {
     Ok(res)
 }
 
-pub fn use_new_precedance(config: &Config, grammar: &str) -> Result<bool> {
+pub fn use_new_precedence(config: &Config, grammar: &str) -> Result<bool> {
     let repo = config
         .repos
         .iter()
@@ -323,7 +323,7 @@ pub enum Metadata {
         /// Grammars should only be reused from the same `Repo`.
         #[serde(rename = "reuse-parser")]
         name: String,
-        /// Wether to use the new query precedence
+        /// Whether to use the new query precedence
         /// where later matches take priority.
         #[serde(default)]
         new_precedence: bool,
@@ -368,19 +368,19 @@ pub struct ParserDefinition {
     /// The SPDX license identifier of the upstream grammar repository
     #[serde(default)]
     pub license: String,
-    /// Wether to use the new query precedence
+    /// Whether to use the new query precedence
     /// where later matches take priority.
     #[serde(default)]
     pub new_precedence: bool,
-    /// Wether the `parser.c` file is compressed
+    /// Whether the `parser.c` file is compressed
     #[serde(default)]
     pub compressed: bool,
 }
 
-// ruzstd is a bit manual if they provided a better Reader implementation this
-// owuldn't be necessary... they don't do that because using zstd effeciently
+// ruzstd is a bit manual, if they provided a better Reader implementation this
+// wouldn't be necessary... they don't do that because using zstd efficiently
 // apparently requires a seekable reader. Most readers are seekable so just
-// adding an extra trait bount would help... oh well
+// adding an extra trait bound would help... oh well
 
 /// decompresses a file compressed by skidder
 pub fn decompress(src: &mut File, mut dst: impl Write) -> Result<()> {
