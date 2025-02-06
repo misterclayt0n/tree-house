@@ -200,7 +200,7 @@ impl InjectionsQuery {
             .as_deref()
             .map(InjectionLanguageMarker::Name))?;
 
-        let language = loader.load_language(&marker)?;
+        let language = loader.language_for_marker(&marker)?;
         let scope = if properties.combined {
             Some(InjectionScope::Pattern {
                 pattern: query_match.pattern(),

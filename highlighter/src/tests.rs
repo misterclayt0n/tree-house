@@ -161,7 +161,7 @@ impl TestLanguageLoader {
 }
 
 impl LanguageLoader for TestLanguageLoader {
-    fn load_language(&self, marker: &InjectionLanguageMarker) -> Option<Language> {
+    fn language_for_marker(&self, marker: &InjectionLanguageMarker) -> Option<Language> {
         let InjectionLanguageMarker::Name(name) = marker else {
             return None;
         };
