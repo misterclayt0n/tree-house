@@ -161,7 +161,7 @@ impl LanguageLoader for TestLanguageLoader {
         let InjectionLanguageMarker::Name(name) = marker else {
             return None;
         };
-        self.languages.get(&**name).copied()
+        self.languages.get(*name).copied()
     }
 
     fn get_config(&self, lang: Language) -> &LanguageConfig {

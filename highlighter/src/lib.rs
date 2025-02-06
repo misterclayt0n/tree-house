@@ -2,9 +2,7 @@ use ropey::RopeSlice;
 
 use slab::Slab;
 
-use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
-use std::str;
 use std::time::Duration;
 use tree_sitter::{SyntaxTree, SyntaxTreeNode};
 
@@ -30,7 +28,7 @@ pub mod query_iter;
 pub mod text_object;
 // mod tree_cursor;
 
-/// A layer represent a single a single syntax tree that represents (part of)
+/// A layer represents a single a single syntax tree that represents (part of)
 /// a file parsed with a tree-sitter grammar. See [`Syntax`].
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct Layer(u32);
@@ -259,10 +257,6 @@ pub enum Error {
     InvalidLanguage,
     InvalidRanges,
     Unknown,
-}
-
-fn byte_range_to_str(range: Range, source: RopeSlice) -> Cow<str> {
-    Cow::from(source.byte_slice(range.start as usize..range.end as usize))
 }
 
 /// The maximum number of in-progress matches a TS cursor can consider at once.

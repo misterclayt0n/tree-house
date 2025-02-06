@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::cmp::Reverse;
 use std::iter::{self, Peekable};
 use std::mem::take;
@@ -11,10 +10,7 @@ use ropey::RopeSlice;
 
 use crate::config::{LanguageConfig, LanguageLoader};
 use crate::parse::LayerUpdateFlags;
-use crate::{
-    byte_range_to_str, Injection, Language, Layer, LayerData, Range, Syntax,
-    TREE_SITTER_MATCH_LIMIT,
-};
+use crate::{Injection, Language, Layer, LayerData, Range, Syntax, TREE_SITTER_MATCH_LIMIT};
 use tree_sitter::query::UserPredicate;
 use tree_sitter::{
     query, Capture, Grammar, InactiveQueryCursor, MatchedNodeIdx, Pattern, Query, QueryMatch,
@@ -31,11 +27,27 @@ pub struct InjectionProperties {
     combined: bool,
 }
 
+/// An indicator in the document or query source file which used by the loader to know which
+/// language an injection should use.
+///
+/// For example if a query sets a property `(#set! injection.language "rust")` then the loader
+/// should load the Rust language. Alternatively the loader might be asked to load a language
+/// based on some text in the document, for example a markdown code fence language name.
 #[derive(Debug, Clone)]
 pub enum InjectionLanguageMarker<'a> {
-    Name(Cow<'a, str>),
-    Filename(Cow<'a, Path>),
-    Shebang(String),
+    /// The language is specified by name in the injection query itself.
+    ///
+    /// For example `(#set! injection.language "rust")`. These names should match exactly and so
+    /// they can be looked up by equality - very efficiently.
+    Name(&'a str),
+    /// The language is specified by name - or similar - within the parsed document.
+    ///
+    /// This is slightly different than the `ExactName` variant: within a document you might
+    /// specify Markdown as "md" or "markdown" for example. The loader should look up the language
+    /// name by longest matching regex.
+    Match(RopeSlice<'a>),
+    Filename(RopeSlice<'a>),
+    Shebang(RopeSlice<'a>),
 }
 
 #[derive(Clone, Debug)]
@@ -143,18 +155,21 @@ impl InjectionsQuery {
             .cloned()
             .unwrap_or_default();
 
-        let mut injection_capture = None;
+        let mut marker = None;
         let mut last_content_node = 0;
         let mut content_nodes = 0;
         for (i, matched_node) in query_match.matched_nodes().enumerate() {
             let capture = Some(matched_node.capture);
             if capture == self.injection_language_capture {
-                let name = byte_range_to_str(matched_node.syntax_node.byte_range(), source);
-                injection_capture = Some(InjectionLanguageMarker::Name(name));
+                let range = matched_node.syntax_node.byte_range();
+                marker = Some(InjectionLanguageMarker::Match(
+                    source.byte_slice(range.start as usize..range.end as usize),
+                ));
             } else if capture == self.injection_filename_capture {
-                let name = byte_range_to_str(matched_node.syntax_node.byte_range(), source);
-                let path = Path::new(name.as_ref()).to_path_buf();
-                injection_capture = Some(InjectionLanguageMarker::Filename(path.into()));
+                let range = matched_node.syntax_node.byte_range();
+                marker = Some(InjectionLanguageMarker::Filename(
+                    source.byte_slice(range.start as usize..range.end as usize),
+                ));
             } else if capture == self.injection_shebang_capture {
                 let range = matched_node.syntax_node.byte_range();
                 let node_slice = source.byte_slice(range.start as usize..range.end as usize);
@@ -167,11 +182,11 @@ impl InjectionsQuery {
                     node_slice
                 };
 
-                injection_capture = SHEBANG_REGEX
+                marker = SHEBANG_REGEX
                     .captures_iter(regex_cursor::Input::new(lines))
                     .map(|cap| {
                         let cap = lines.byte_slice(cap.get_group(1).unwrap().range());
-                        InjectionLanguageMarker::Shebang(cap.into())
+                        InjectionLanguageMarker::Shebang(cap)
                     })
                     .next()
             } else if capture == self.injection_content_capture {
@@ -180,12 +195,12 @@ impl InjectionsQuery {
                 last_content_node = i as u32;
             }
         }
-        let language = injection_capture.or(properties
+        let marker = marker.or(properties
             .language
             .as_deref()
-            .map(|name| InjectionLanguageMarker::Name(name.into())))?;
+            .map(InjectionLanguageMarker::Name))?;
 
-        let language = loader.load_language(&language)?;
+        let language = loader.load_language(&marker)?;
         let scope = if properties.combined {
             Some(InjectionScope::Pattern {
                 pattern: query_match.pattern(),
