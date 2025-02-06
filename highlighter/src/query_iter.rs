@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 use ropey::RopeSlice;
 
 use crate::{Injection, Language, Layer, Range, Syntax, TREE_SITTER_MATCH_LIMIT};
-use tree_sitter::{Capture, InactiveQueryCursor, Query, QueryCursor, RopeTsInput};
+use tree_sitter::{Capture, InactiveQueryCursor, Query, QueryCursor, RopeInput};
 
 #[derive(Debug, Clone)]
 pub struct MatchedNode {
@@ -16,7 +16,7 @@ pub struct MatchedNode {
 }
 
 struct LayerQueryIter<'a> {
-    cursor: QueryCursor<'a, 'a, RopeTsInput<'a>>,
+    cursor: QueryCursor<'a, 'a, RopeInput<'a>>,
     peeked: Option<MatchedNode>,
 }
 
@@ -75,7 +75,7 @@ where
                 let cursor = InactiveQueryCursor::new().execute_query(
                     self.loader.get_query(layer.language),
                     &node,
-                    RopeTsInput::new(self.src),
+                    RopeInput::new(self.src),
                 );
                 Box::new(ActiveLayer {
                     state: S::default(),

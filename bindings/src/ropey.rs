@@ -3,34 +3,34 @@ use std::ops;
 use regex_cursor::{Cursor, RopeyCursor};
 use ropey::RopeSlice;
 
-use crate::{IntoTsInput, TsInput};
+use crate::{Input, IntoInput};
 
-pub struct RopeTsInput<'a> {
+pub struct RopeInput<'a> {
     src: RopeSlice<'a>,
     cursor: regex_cursor::RopeyCursor<'a>,
 }
 
-impl<'a> RopeTsInput<'a> {
+impl<'a> RopeInput<'a> {
     pub fn new(src: RopeSlice<'a>) -> Self {
-        RopeTsInput {
+        RopeInput {
             src,
             cursor: regex_cursor::RopeyCursor::new(src),
         }
     }
 }
 
-impl<'a> IntoTsInput for RopeSlice<'a> {
-    type TsInput = RopeTsInput<'a>;
+impl<'a> IntoInput for RopeSlice<'a> {
+    type Input = RopeInput<'a>;
 
-    fn into_ts_input(self) -> Self::TsInput {
-        RopeTsInput {
+    fn into_input(self) -> Self::Input {
+        RopeInput {
             src: self,
             cursor: RopeyCursor::new(self),
         }
     }
 }
 
-impl<'a> TsInput for RopeTsInput<'a> {
+impl<'a> Input for RopeInput<'a> {
     type Cursor = RopeyCursor<'a>;
     fn cursor_at(&mut self, offset: u32) -> &mut RopeyCursor<'a> {
         let offset = offset as usize;

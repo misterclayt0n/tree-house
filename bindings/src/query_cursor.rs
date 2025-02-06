@@ -7,7 +7,7 @@ use std::ptr::{self, NonNull};
 
 use crate::query::{Capture, Pattern, Query, QueryData};
 use crate::syntax_tree_node::SyntaxTreeNodeRaw;
-use crate::{IntoTsInput, SyntaxTree, SyntaxTreeNode, TsInput};
+use crate::{Input, IntoInput, SyntaxTree, SyntaxTreeNode};
 
 enum QueryCursorData {}
 
@@ -20,14 +20,14 @@ unsafe fn with_cache<T>(f: impl FnOnce(&mut Vec<InactiveQueryCursor>) -> T) -> T
     CURSOR_CACHE.with(|cache| f(&mut *cache.get()))
 }
 
-pub struct QueryCursor<'a, 'tree, I: TsInput> {
+pub struct QueryCursor<'a, 'tree, I: Input> {
     query: &'a Query,
     ptr: NonNull<QueryCursorData>,
     tree: PhantomData<&'tree SyntaxTree>,
     input: I,
 }
 
-impl<'tree, I: TsInput> QueryCursor<'_, 'tree, I> {
+impl<'tree, I: Input> QueryCursor<'_, 'tree, I> {
     pub fn next_match(&mut self) -> Option<QueryMatch<'_, 'tree>> {
         let mut query_match = TSQueryMatch {
             id: 0,
@@ -121,7 +121,7 @@ impl<'tree, I: TsInput> QueryCursor<'_, 'tree, I> {
     }
 }
 
-impl<I: TsInput> Drop for QueryCursor<'_, '_, I> {
+impl<I: Input> Drop for QueryCursor<'_, '_, I> {
     fn drop(&mut self) {
         unsafe { with_cache(|cache| cache.push(InactiveQueryCursor { ptr: self.ptr })) }
     }
@@ -173,12 +173,12 @@ impl InactiveQueryCursor {
         }
     }
 
-    pub fn execute_query<'a, 'tree, I: IntoTsInput>(
+    pub fn execute_query<'a, 'tree, I: IntoInput>(
         self,
         query: &'a Query,
         node: &SyntaxTreeNode<'tree>,
         input: I,
-    ) -> QueryCursor<'a, 'tree, I::TsInput> {
+    ) -> QueryCursor<'a, 'tree, I::Input> {
         let ptr = self.ptr;
         unsafe { ts_query_cursor_exec(ptr.as_ptr(), query.raw.as_ref(), node.as_raw()) };
         mem::forget(self);
@@ -186,7 +186,7 @@ impl InactiveQueryCursor {
             query,
             ptr,
             tree: PhantomData,
-            input: input.into_ts_input(),
+            input: input.into_input(),
         }
     }
 }

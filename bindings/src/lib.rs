@@ -9,7 +9,7 @@ mod tree_cursor;
 #[cfg(feature = "ropey")]
 mod ropey;
 #[cfg(feature = "ropey")]
-pub use ropey::RopeTsInput;
+pub use ropey::RopeInput;
 
 use std::ops;
 
@@ -37,21 +37,21 @@ pub struct Range {
     pub end_byte: u32,
 }
 
-pub trait TsInput {
+pub trait Input {
     type Cursor: regex_cursor::Cursor;
     fn cursor_at(&mut self, offset: u32) -> &mut Self::Cursor;
     fn eq(&mut self, range1: ops::Range<u32>, range2: ops::Range<u32>) -> bool;
 }
 
-impl<T: TsInput> IntoTsInput for T {
-    type TsInput = T;
-
-    fn into_ts_input(self) -> T {
-        self
-    }
+pub trait IntoInput {
+    type Input: Input;
+    fn into_input(self) -> Self::Input;
 }
 
-pub trait IntoTsInput {
-    type TsInput: TsInput;
-    fn into_ts_input(self) -> Self::TsInput;
+impl<T: Input> IntoInput for T {
+    type Input = T;
+
+    fn into_input(self) -> T {
+        self
+    }
 }

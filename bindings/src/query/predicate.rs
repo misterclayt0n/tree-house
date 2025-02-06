@@ -7,7 +7,7 @@ use std::{fmt, slice};
 use crate::query::property::QueryProperty;
 use crate::query::{Capture, Pattern, PatternData, Query, QueryData, QueryStr, UserPredicate};
 use crate::query_cursor::MatchedNode;
-use crate::TsInput;
+use crate::Input;
 
 use regex_cursor::engines::meta::Regex;
 use regex_cursor::Cursor;
@@ -42,7 +42,7 @@ pub(crate) struct TextPredicate {
     match_all: bool,
 }
 
-fn input_matches_str<I: TsInput>(str: &str, range: Range<u32>, input: &mut I) -> bool {
+fn input_matches_str<I: Input>(str: &str, range: Range<u32>, input: &mut I) -> bool {
     if str.len() != range.len() {
         return false;
     }
@@ -81,7 +81,7 @@ impl TextPredicate {
         }
     }
 
-    pub fn satisfied<I: TsInput>(
+    pub fn satisfied<I: Input>(
         &self,
         input: &mut I,
         matched_nodes: &[MatchedNode],

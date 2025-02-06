@@ -8,7 +8,7 @@ use std::{fmt, mem, ptr};
 use regex_cursor::Cursor;
 
 use crate::syntax_tree::{SyntaxTree, SyntaxTreeData};
-use crate::{Grammar, IntoTsInput, Point, Range, TsInput};
+use crate::{Grammar, Input, IntoInput, Point, Range};
 
 // opaque data
 enum ParserData {}
@@ -81,13 +81,13 @@ impl Parser {
     }
 
     #[must_use]
-    pub fn parse<I: TsInput>(
+    pub fn parse<I: Input>(
         &mut self,
-        input: impl IntoTsInput<TsInput = I>,
+        input: impl IntoInput<Input = I>,
         old_tree: Option<&SyntaxTree>,
     ) -> Option<SyntaxTree> {
-        let mut input = input.into_ts_input();
-        unsafe extern "C" fn read<C: TsInput>(
+        let mut input = input.into_input();
+        unsafe extern "C" fn read<C: Input>(
             payload: NonNull<c_void>,
             byte_index: u32,
             _position: Point,
