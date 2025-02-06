@@ -90,7 +90,7 @@ pub struct Highlighter<'a, Loader: LanguageLoader> {
 
 pub struct HighlightList<'a>(slice::Iter<'a, HighlightedNode>);
 
-impl<'a> Iterator for HighlightList<'a> {
+impl Iterator for HighlightList<'_> {
     type Item = Highlight;
 
     fn next(&mut self) -> Option<Highlight> {

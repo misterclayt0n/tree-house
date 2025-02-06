@@ -57,7 +57,7 @@ pub trait LanguageLoader {
     fn get_config(&self, lang: Language) -> &LanguageConfig;
 }
 
-impl<'a, T> LanguageLoader for &'a T
+impl<T> LanguageLoader for &'_ T
 where
     T: LanguageLoader,
 {

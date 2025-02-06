@@ -14,7 +14,7 @@ pub enum CapturedNode<'a> {
     Grouped(Vec<SyntaxTreeNode<'a>>),
 }
 
-impl<'a> CapturedNode<'a> {
+impl CapturedNode<'_> {
     pub fn start_byte(&self) -> usize {
         match self {
             Self::Single(n) => n.start_byte() as usize,

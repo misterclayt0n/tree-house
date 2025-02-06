@@ -243,7 +243,7 @@ impl InjectionsQuery {
         node: &SyntaxTreeNode<'a>,
         source: RopeSlice<'a>,
         loader: &'a impl LanguageLoader,
-    ) -> impl Iterator<Item = InjectionQueryMatch> + 'a {
+    ) -> impl Iterator<Item = InjectionQueryMatch<'a>> + 'a {
         let mut cursor = InactiveQueryCursor::new();
         cursor.set_byte_range(0..u32::MAX);
         cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);

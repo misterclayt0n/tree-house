@@ -20,7 +20,7 @@ struct LayerQueryIter<'a> {
     peeked: Option<MatchedNode>,
 }
 
-impl<'a> LayerQueryIter<'a> {
+impl LayerQueryIter<'_> {
     fn peek(&mut self) -> Option<&MatchedNode> {
         if self.peeked.is_none() {
             let (query_match, node_idx) = self.cursor.next_matched_node()?;
