@@ -4,9 +4,12 @@ use std::ptr::NonNull;
 
 use libloading::{Library, Symbol};
 
-/// supported TS versions, WARNING: update when updating vendored c sources
+/// Lowest supported ABI version of a grammar.
+// WARNING: update when updating vendored c sources
+// `TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION`
 pub const MIN_COMPATIBLE_ABI_VERSION: u32 = 13;
-pub const ABI_VERSION: u32 = 14;
+// `TREE_SITTER_LANGUAGE_VERSION`
+pub const ABI_VERSION: u32 = 15;
 
 // opaque pointer
 enum GrammarData {}

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::{env, fs};
 
 fn main() {
@@ -7,7 +7,7 @@ fn main() {
     }
     let mut config = cc::Build::new();
 
-    let manifest_path = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
+    let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR"));
     let include_path = manifest_path.join("vendor/include");
     let src_path = manifest_path.join("vendor/src");
     for entry in fs::read_dir(&src_path).unwrap() {
@@ -21,8 +21,12 @@ fn main() {
         .flag_if_supported("-fvisibility=hidden")
         .flag_if_supported("-Wshadow")
         .flag_if_supported("-Wno-unused-parameter")
+        .flag_if_supported("-Wno-incompatible-pointer-types")
         .include(&src_path)
         .include(&include_path)
+        .define("_POSIX_C_SOURCE", "200112L")
+        .define("_DEFAULT_SOURCE", None)
+        .warnings(false)
         .file(src_path.join("lib.c"))
         .compile("tree-sitter");
 }

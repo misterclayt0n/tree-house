@@ -55,8 +55,13 @@ impl Parser {
     pub fn set_grammar(&mut self, grammar: Grammar) {
         unsafe { ts_parser_set_language(self.ptr, grammar) };
     }
+
     pub fn set_timeout(&mut self, duration: Duration) {
-        unsafe { ts_parser_set_timeout_micros(self.ptr, duration.as_micros().try_into().unwrap()) }
+        // TODO: migrate away from timing and towards the progress API.
+        #[allow(deprecated)]
+        unsafe {
+            ts_parser_set_timeout_micros(self.ptr, duration.as_micros().try_into().unwrap())
+        }
     }
 
     /// Set the ranges of text that the parser should include when parsing. By default, the parser
@@ -115,8 +120,8 @@ impl Parser {
         let input = ParserInputRaw {
             payload: NonNull::from(&mut input).cast(),
             read: read::<I>,
-            // utf8
-            encoding: 0,
+            encoding: InputEncoding::Utf8,
+            decode: None,
         };
         unsafe {
             let old_tree = old_tree.map(|tree| tree.as_raw());
@@ -160,12 +165,31 @@ type TreeSitterReadFn = unsafe extern "C" fn(
     bytes_read: *mut u32,
 ) -> *const u8;
 
+/// A function that reads one code point from the given string, returning the number of bytes
+/// consumed.
+type DecodeInputFn =
+    unsafe extern "C" fn(string: *const u8, length: u32, code_point: *const i32) -> u32;
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct ParserInputRaw {
     pub payload: NonNull<c_void>,
     pub read: TreeSitterReadFn,
-    pub encoding: u32,
+    pub encoding: InputEncoding,
+    /// A function to decode the the input.
+    ///
+    /// This function is only used if the encoding is `InputEncoding::Custom`.
+    pub decode: Option<DecodeInputFn>,
+}
+
+// `TSInputEncoding`
+#[repr(u32)]
+#[derive(Debug, Clone, Copy)]
+pub enum InputEncoding {
+    Utf8,
+    Utf16LE,
+    Utf16BE,
+    Custom,
 }
 
 extern "C" {
@@ -233,5 +257,6 @@ extern "C" {
     ///
     /// If parsing takes longer than this, it will halt early, returning NULL.
     /// See [`ts_parser_parse`] for more information.
+    #[deprecated = "use ts_parser_parse_with_options and pass in a calback instead, this will be removed in 0.26"]
     fn ts_parser_set_timeout_micros(self_: NonNull<ParserData>, timeout_micros: u64);
 }
