@@ -18,7 +18,7 @@ mod config;
 pub mod highlighter;
 mod injections_query;
 mod parse;
-#[cfg(test)]
+#[cfg(all(test, feature = "fixtures"))]
 mod tests;
 // mod pretty_print;
 #[cfg(feature = "fixtures")]
