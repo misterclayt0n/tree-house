@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::os::raw::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr::NonNull;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{fmt, mem, ptr};
 
 use regex_cursor::Cursor;
@@ -32,6 +32,7 @@ impl Drop for RawParser {
 /// source code.
 pub struct Parser {
     ptr: NonNull<ParserData>,
+    timeout: Option<Duration>,
 }
 
 impl Parser {
@@ -46,7 +47,7 @@ impl Parser {
             }
             None => unsafe { ts_parser_new() },
         };
-        Parser { ptr }
+        Parser { ptr, timeout: None }
     }
 
     /// Set the language that the parser should use for parsing.
@@ -55,11 +56,7 @@ impl Parser {
     }
 
     pub fn set_timeout(&mut self, duration: Duration) {
-        // TODO: migrate away from timing and towards the progress API.
-        #[allow(deprecated)]
-        unsafe {
-            ts_parser_set_timeout_micros(self.ptr, duration.as_micros().try_into().unwrap())
-        }
+        self.timeout = Some(duration);
     }
 
     /// Set the ranges of text that the parser should include when parsing. By default, the parser
@@ -121,9 +118,25 @@ impl Parser {
             encoding: InputEncoding::Utf8,
             decode: None,
         };
+
+        let options = if let Some(timeout) = self.timeout {
+            unsafe extern "C" fn check_timeout(state: NonNull<ParseState>) -> bool {
+                let &(start, timeout) = state.as_ref().payload.cast().as_ref();
+                Instant::now().duration_since(start) > timeout
+            }
+
+            let start = Instant::now();
+            ParseOptions {
+                payload: Some(NonNull::from(&mut (start, timeout)).cast()),
+                progress_callback: Some(check_timeout),
+            }
+        } else {
+            ParseOptions::default()
+        };
+
         unsafe {
             let old_tree = old_tree.map(|tree| tree.as_raw());
-            let new_tree = ts_parser_parse(self.ptr, old_tree, input);
+            let new_tree = ts_parser_parse_with_options(self.ptr, old_tree, input, options);
             new_tree.map(|raw| SyntaxTree::from_raw(raw))
         }
     }
@@ -190,6 +203,26 @@ pub enum InputEncoding {
     Custom,
 }
 
+#[repr(C)]
+#[derive(Debug)]
+struct ParseState {
+    /// The payload passed via `ParseOptions`' `payload` field.
+    payload: NonNull<c_void>,
+    current_byte_offset: u32,
+    has_error: bool,
+}
+
+/// A function that accepts the current parser state and returns `true` when the parse should be
+/// cancelled.
+type ProgressCallback = unsafe extern "C" fn(state: NonNull<ParseState>) -> bool;
+
+#[repr(C)]
+#[derive(Debug, Default)]
+struct ParseOptions {
+    payload: Option<NonNull<c_void>>,
+    progress_callback: Option<ProgressCallback>,
+}
+
 extern "C" {
     /// Create a new parser
     fn ts_parser_new() -> NonNull<ParserData>;
@@ -220,36 +253,13 @@ extern "C" {
         count: u32,
     ) -> bool;
 
-    /// Use the parser to parse some source code and create a syntax tree. If you are parsing this
-    /// document for the first time, pass `NULL` for the `old_tree` parameter. Otherwise, if you
-    /// have already parsed an earlier version of this document and the document has since been
-    /// edited, pass the previous syntax tree so that the unchanged parts of it can be reused.
-    /// This will save time and memory. For this to work correctly, you must have already edited
-    /// the old syntax tree using the [`ts_tree_edit`] function in a way that exactly matches
-    /// the source code changes. The [`TSInput`] parameter lets you specify how to read the text.
-    /// It has the following three fields: 1. [`read`]: A function to retrieve a chunk of text
-    /// at a given byte offset and (row, column) position. The function should return a pointer
-    /// to the text and write its length to the [`bytes_read`] pointer. The parser does not
-    /// take ownership of this buffer; it just borrows it until it has finished reading it. The
-    /// function should write a zero value to the [`bytes_read`] pointer to indicate the end of the
-    /// document. 2. [`payload`]: An arbitrary pointer that will be passed to each invocation of
-    /// the [`read`] function. 3. [`encoding`]: An indication of how the text is encoded. Either
-    /// `TSInputEncodingUTF8` or `TSInputEncodingUTF16`. This function returns a syntax tree
-    /// on success, and `NULL` on failure. There are three possible reasons for failure: 1. The
-    /// parser does not have a language assigned. Check for this using the [`ts_parser_language`]
-    /// function. 2. Parsing was cancelled due to a timeout that was set by an earlier call to the
-    /// [`ts_parser_set_timeout_micros`] function. You can resume parsing from where the parser
-    /// left out by calling [`ts_parser_parse`] again with the same arguments. Or you can start
-    /// parsing from scratch by first calling [`ts_parser_reset`]. 3. Parsing was cancelled using
-    /// a cancellation flag that was set by an earlier call to [`ts_parser_set_cancellation_flag`].
-    /// You can resume parsing from where the parser left out by calling [`ts_parser_parse`] again
-    /// with the same arguments. [`read`]: TSInput::read [`payload`]: TSInput::payload [`encoding`]:
-    /// TSInput::encoding [`bytes_read`]: TSInput::read
+    /*
     fn ts_parser_parse(
         parser: NonNull<ParserData>,
         old_tree: Option<NonNull<SyntaxTreeData>>,
         input: ParserInputRaw,
     ) -> Option<NonNull<SyntaxTreeData>>;
+
     /// Set the maximum duration in microseconds that parsing should be allowed to
     /// take before halting.
     ///
@@ -257,4 +267,17 @@ extern "C" {
     /// See [`ts_parser_parse`] for more information.
     #[deprecated = "use ts_parser_parse_with_options and pass in a calback instead, this will be removed in 0.26"]
     fn ts_parser_set_timeout_micros(self_: NonNull<ParserData>, timeout_micros: u64);
+    */
+
+    /// Use the parser to parse some source code and create a syntax tree, with some options.
+    ///
+    /// See `ts_parser_parse` for more details.
+    ///
+    /// See `TSParseOptions` for more details on the options.
+    fn ts_parser_parse_with_options(
+        parser: NonNull<ParserData>,
+        old_tree: Option<NonNull<SyntaxTreeData>>,
+        input: ParserInputRaw,
+        parse_options: ParseOptions,
+    ) -> Option<NonNull<SyntaxTreeData>>;
 }
