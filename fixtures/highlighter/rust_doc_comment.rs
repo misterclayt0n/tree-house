@@ -1,12 +1,16 @@
    /// **hello-world** 
-// ┡━━┛┡┛┡━━━━━━━━━┛┡┛╰─ comment
-// │   │ │          ╰─ comment markup.bold punctuation.bracket
-// │   │ ╰─ comment markup.bold
-// │   ╰─ comment markup.bold punctuation.bracket
+// ┡┛╿╿┡┛┡━━━━━━━━━┛┡┛╰─ comment
+// │ │││ │          ╰─ comment markup.bold punctuation.bracket
+// │ │││ ╰─ comment markup.bold
+// │ ││╰─ comment markup.bold punctuation.bracket
+// │ │╰─ comment
+// │ ╰─ comment comment
 // ╰─ comment
    /// **foo
-// ┡━━┛┡┛┗━┹─ comment markup.bold
-// │   ╰─ comment markup.bold punctuation.bracket
+// ┡┛╿╿┡┛┗━┹─ comment markup.bold
+// │ ││╰─ comment markup.bold punctuation.bracket
+// │ │╰─ comment
+// │ ╰─ comment comment
 // ╰─ comment
    fn foo() {
 // ┡┛ ┡━┛┡┛ ╰─ punctuation.bracket
@@ -21,9 +25,10 @@
    }
 // ╰─ punctuation.bracket
    /// bar**
-// ┡━┛┡━━┛┡┛╰─ comment
-// │  │   ╰─ comment markup.bold punctuation.bracket
-// │  ╰─ comment markup.bold
+// ┡┛╿┡━━┛┡┛╰─ comment
+// │ ││   ╰─ comment markup.bold punctuation.bracket
+// │ │╰─ comment markup.bold
+// │ ╰─ comment comment
 // ╰─ comment
    fn bar() {
 // ┡┛ ┡━┛┡┛ ╰─ punctuation.bracket

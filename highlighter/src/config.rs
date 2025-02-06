@@ -13,7 +13,6 @@ pub struct LanguageConfig {
     pub grammar: Grammar,
     pub highlight_query: HighlightQuery,
     pub injections_query: InjectionsQuery,
-    pub new_precedence: bool,
 }
 
 static INHERITS_REGEX: Lazy<Regex> =

@@ -223,19 +223,15 @@ impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
             return;
         }
 
-        // if there are multiple matches for the exact same node
-        // only use one of the (the last with new/nvim precedence)
+        // If multiple patterns match this exact node, prefer the last one which matched.
+        // This matches the precedence of Neovim, Zed, and tree-sitter-cli.
         if !*first_highlight
             && self
                 .active_highlights
                 .last()
                 .is_some_and(|prev_node| prev_node.end == node.byte_range.end)
         {
-            if self.active_config.new_precedence {
-                self.active_highlights.pop();
-            } else {
-                return;
-            }
+            self.active_highlights.pop();
         }
         let highlight = self.active_config.highlight_query.highlight_indices[node.capture.idx()];
         if highlight != Highlight::NONE {

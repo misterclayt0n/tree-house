@@ -18,7 +18,7 @@ fn skidder_config() -> skidder::Config {
         repos: vec![Repo::Git {
             name: "helix-language-support".to_owned(),
             remote: "git@github.com:helix-editor/tree-sitter-grammars.git".into(),
-            branch: "main".into(),
+            branch: "reversed".into(),
         }],
         index: Path::new("../test-grammars").canonicalize().unwrap(),
         verbose: true,
@@ -34,17 +34,22 @@ struct Overwrites {
 fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
     let skidder_config = skidder_config();
     let grammar_dir = skidder_config.grammar_dir(grammar).unwrap();
-    let new_precedence = skidder::use_new_precedence(&skidder_config, grammar).unwrap();
     let parser_path = skidder::build_grammar(&skidder_config, grammar, false).unwrap();
     let grammar = unsafe { Grammar::new(grammar, &parser_path).unwrap() };
     let highlights_query_path = grammar_dir.join("highlights.scm");
     let highlight_query = HighlightQuery::new(
         grammar,
         &highlights_query_path,
-        &overwrites
-            .highlights
-            .clone()
-            .unwrap_or_else(|| fs::read_to_string(&highlights_query_path).unwrap()),
+        &overwrites.highlights.clone().unwrap_or_else(|| {
+            fs::read_to_string(&highlights_query_path)
+                .map_err(|err| {
+                    format!(
+                        "failed to read highlights in {}: {err}",
+                        highlights_query_path.display()
+                    )
+                })
+                .unwrap()
+        }),
     )
     .unwrap();
     let injections_query_path = grammar_dir.join("injections.scm");
@@ -64,7 +69,6 @@ fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
         grammar,
         highlight_query,
         injections_query,
-        new_precedence,
     }
 }
 
@@ -123,23 +127,16 @@ impl TestLanguageLoader {
         self.overwrites[lang.idx()].highlights = Some(content);
         self.lang_config[lang.idx()] = OnceCell::new();
     }
+
     fn shadow_injections(&mut self, lang: &str, content: &str) {
         let lang = self.get(lang);
         let skidder_config = skidder_config();
         let grammar = self.languages.get_index(lang.idx()).unwrap().0;
-        let new_precedence = skidder::use_new_precedence(&skidder_config, grammar).unwrap();
         let grammar_dir = skidder_config.grammar_dir(grammar).unwrap();
         let mut injections =
             fs::read_to_string(grammar_dir.join("injections.scm")).unwrap_or_default();
-        if new_precedence {
-            injections.push('\n');
-            injections.push_str(content)
-        } else {
-            let mut content = content.to_owned();
-            content.push('\n');
-            content.push_str(&injections);
-            injections = content;
-        }
+        injections.push('\n');
+        injections.push_str(content);
         self.overwrites[lang.idx()].injections = Some(injections);
         self.lang_config[lang.idx()] = OnceCell::new();
     }
@@ -150,18 +147,10 @@ impl TestLanguageLoader {
         let lang = self.get(lang);
         let skidder_config = skidder_config();
         let grammar = self.languages.get_index(lang.idx()).unwrap().0;
-        let new_precedence = skidder::use_new_precedence(&skidder_config, grammar).unwrap();
         let grammar_dir = skidder_config.grammar_dir(grammar).unwrap();
         let mut highlights = fs::read_to_string(grammar_dir.join("highlights.scm")).unwrap();
-        if new_precedence {
-            highlights.push('\n');
-            highlights.push_str(content)
-        } else {
-            let mut content = content.to_owned();
-            content.push('\n');
-            content.push_str(&highlights);
-            highlights = content;
-        }
+        highlights.push('\n');
+        highlights.push_str(content);
         self.overwrites[lang.idx()].highlights = Some(highlights);
         self.lang_config[lang.idx()] = OnceCell::new();
     }
@@ -276,25 +265,27 @@ fn injection_precedence() {
     loader.shadow_injections(
         "rust",
         r#"
-([(line_comment (doc_comment) @injection.content) (block_comment (doc_comment) @injection.content)]
- (#set! injection.language "markdown")
- (#set! injection.combined))
-
-([(line_comment) (block_comment)] @injection.content
- (#set! injection.language "comment")
- (#set! injection.include-children))"#,
-    );
-    highlight_fixture(&loader, "highlighter/rust_doc_comment.rs");
-    loader.shadow_injections(
-        "rust",
-        r#"
 ([(line_comment) (block_comment)] @injection.content
  (#set! injection.language "comment")
  (#set! injection.include-children))
 
 ([(line_comment (doc_comment) @injection.content) (block_comment (doc_comment) @injection.content)]
  (#set! injection.language "markdown")
- (#set! injection.combined))"#,
+ (#set! injection.combined))
+ "#,
+    );
+    highlight_fixture(&loader, "highlighter/rust_doc_comment.rs");
+    loader.shadow_injections(
+        "rust",
+        r#"
+([(line_comment (doc_comment) @injection.content) (block_comment (doc_comment) @injection.content)]
+ (#set! injection.language "markdown")
+ (#set! injection.combined))
+
+([(line_comment) (block_comment)] @injection.content
+ (#set! injection.language "comment")
+ (#set! injection.include-children))
+ "#,
     );
     highlight_fixture(&loader, "highlighter/rust_no_doc_comment.rs");
     injection_fixture(&loader, "injections/rust_no_doc_comment.rs");

@@ -227,7 +227,6 @@ impl InjectionsQuery {
         &'a self,
         node: &SyntaxTreeNode<'a>,
         source: RopeSlice<'a>,
-        new_precedence: bool,
         loader: &'a impl LanguageLoader,
     ) -> impl Iterator<Item = InjectionQueryMatch> + 'a {
         let mut cursor = InactiveQueryCursor::new();
@@ -274,9 +273,8 @@ impl InjectionsQuery {
                         fast_return = false;
                         break;
                     }
-                    if new_precedence {
-                        res = overlap;
-                    }
+                    // Prefer the last capture which matches this exact node.
+                    res = overlap;
                 }
                 if fast_return {
                     return Some(res);
@@ -293,13 +291,7 @@ impl InjectionsQuery {
                 return Some(res);
             }
             buf.push(res);
-            if new_precedence {
-                buf.sort_unstable_by_key(|mat| (mat.pattern, Reverse(mat.node.start_byte())))
-            } else {
-                buf.sort_unstable_by_key(|mat| {
-                    (Reverse(mat.pattern), Reverse(mat.node.start_byte()))
-                })
-            }
+            buf.sort_unstable_by_key(|mat| (mat.pattern, Reverse(mat.node.start_byte())));
             buf.pop()
         })
     }
@@ -318,7 +310,6 @@ impl Syntax {
         let layer_data = &mut self.layer_mut(layer);
         let LanguageConfig {
             ref injections_query,
-            new_precedence,
             ..
         } = *loader.get_config(layer_data.language);
         if injections_query.injection_content_capture.is_none() {
@@ -331,8 +322,7 @@ impl Syntax {
         let mut injections: Vec<Injection> = Vec::with_capacity(layer_data.injections.len());
         let mut old_injections = take(&mut layer_data.injections).into_iter().peekable();
 
-        let injection_query =
-            injections_query.execute(&parse_tree.root_node(), source, new_precedence, loader);
+        let injection_query = injections_query.execute(&parse_tree.root_node(), source, loader);
 
         let mut combined_injections: HashMap<InjectionScope, Layer> = HashMap::with_capacity(32);
         for mat in injection_query {

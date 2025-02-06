@@ -262,16 +262,6 @@ pub fn list_grammars(config: &Config) -> Result<Vec<PathBuf>> {
     Ok(res)
 }
 
-pub fn use_new_precedence(config: &Config, grammar: &str) -> Result<bool> {
-    let repo = config
-        .repos
-        .iter()
-        .find(|repo| repo.has_grammar(config, grammar))
-        .with_context(|| format!("no definition found for {grammar}"))?;
-    let metadata = repo.read_metadata(config, grammar)?;
-    Ok(metadata.new_precedence())
-}
-
 pub fn build_all_grammars(
     config: &Config,
     force_rebuild: bool,
@@ -323,10 +313,6 @@ pub enum Metadata {
         /// Grammars should only be reused from the same `Repo`.
         #[serde(rename = "reuse-parser")]
         name: String,
-        /// Whether to use the new query precedence
-        /// where later matches take priority.
-        #[serde(default)]
-        new_precedence: bool,
     },
 }
 
@@ -349,13 +335,6 @@ impl Metadata {
         let json = serde_json::to_string_pretty(&self).unwrap();
         fs::write(path, json).with_context(|| format!("failed to write {}", path.display()))
     }
-
-    pub fn new_precedence(&self) -> bool {
-        match self {
-            Metadata::ParserDefinition(def) => def.new_precedence,
-            Metadata::ReuseParser { new_precedence, .. } => *new_precedence,
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -368,10 +347,6 @@ pub struct ParserDefinition {
     /// The SPDX license identifier of the upstream grammar repository
     #[serde(default)]
     pub license: String,
-    /// Whether to use the new query precedence
-    /// where later matches take priority.
-    #[serde(default)]
-    pub new_precedence: bool,
     /// Whether the `parser.c` file is compressed
     #[serde(default)]
     pub compressed: bool,
