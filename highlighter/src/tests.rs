@@ -1,8 +1,9 @@
 use std::cell::RefCell;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use indexmap::{IndexMap, IndexSet};
+use once_cell::sync::Lazy;
 use once_cell::unsync::OnceCell;
 use skidder::Repo;
 use tree_sitter::Grammar;
@@ -12,6 +13,16 @@ use crate::fixtures::{check_highlighter_fixture, check_injection_fixture};
 use crate::highlighter::{Highlight, HighlightQuery};
 use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
 use crate::Language;
+
+static GRAMMARS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
+    fs::create_dir_all("../test-grammars").unwrap();
+    let skidder_config = skidder_config();
+    skidder::fetch(&skidder_config, false).unwrap();
+    skidder::build_all_grammars(&skidder_config, false, None).unwrap();
+    let grammars = skidder::list_grammars(&skidder_config).unwrap();
+    assert!(!grammars.is_empty());
+    grammars
+});
 
 fn skidder_config() -> skidder::Config {
     skidder::Config {
@@ -82,16 +93,14 @@ struct TestLanguageLoader {
 
 impl TestLanguageLoader {
     fn new() -> Self {
-        let skidder_config = skidder_config();
-        // skidder::fetch(&skidder_config, false).unwrap();
-        let grammars = skidder::list_grammars(&skidder_config).unwrap();
-        assert!(!grammars.is_empty());
-        let mut loader = TestLanguageLoader {
+        let grammars = &GRAMMARS;
+
+        Self {
             lang_config: (0..grammars.len()).map(|_| OnceCell::new()).collect(),
             overwrites: vec![Overwrites::default(); grammars.len()].into_boxed_slice(),
             test_theme: RefCell::default(),
             languages: grammars
-                .into_iter()
+                .iter()
                 .enumerate()
                 .map(|(i, grammar)| {
                     (
@@ -100,12 +109,7 @@ impl TestLanguageLoader {
                     )
                 })
                 .collect(),
-        };
-        loader.languages.insert(
-            "markdown.inline".into(),
-            loader.languages["markdown-inline"],
-        );
-        loader
+        }
     }
 
     fn get(&self, name: &str) -> Language {
