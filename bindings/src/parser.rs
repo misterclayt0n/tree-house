@@ -18,9 +18,7 @@ thread_local! {
     static PARSER_CACHE: Cell<Option<RawParser>> = const { Cell::new(None) };
 }
 
-/// A stateful object that this is used to produce a [`SyntaxTree`] based on some
-/// source code.
-pub struct RawParser {
+struct RawParser {
     ptr: NonNull<ParserData>,
 }
 
