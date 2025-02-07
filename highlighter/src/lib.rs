@@ -189,7 +189,7 @@ pub struct Injection {
 
 #[derive(Debug)]
 pub struct LayerData {
-    language: Language,
+    pub language: Language,
     parse_tree: Option<SyntaxTree>,
     ranges: Vec<tree_sitter::Range>,
     /// a list of **sorted** non-overlapping injection ranges. Note that
