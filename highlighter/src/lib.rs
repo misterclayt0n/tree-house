@@ -6,9 +6,8 @@ use std::hash::{Hash, Hasher};
 use std::time::Duration;
 use tree_sitter::{SyntaxTree, SyntaxTreeNode};
 
-use crate::config::LanguageLoader;
-
-pub use crate::config::read_query;
+pub use crate::config::{read_query, LanguageConfig, LanguageLoader};
+pub use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
 use crate::parse::LayerUpdateFlags;
 pub use tree_sitter;
 // pub use pretty_print::pretty_print_tree;
