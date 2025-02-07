@@ -1,27 +1,27 @@
 use std::fmt;
 use std::ptr::NonNull;
 
-use crate::syntax_tree_node::{SyntaxTreeNode, SyntaxTreeNodeRaw};
+use crate::node::{Node, SyntaxTreeNodeRaw};
 use crate::Point;
 
 // opaque pointers
 pub(super) enum SyntaxTreeData {}
 
-pub struct SyntaxTree {
+pub struct Tree {
     ptr: NonNull<SyntaxTreeData>,
 }
 
-impl SyntaxTree {
-    pub(super) unsafe fn from_raw(raw: NonNull<SyntaxTreeData>) -> SyntaxTree {
-        SyntaxTree { ptr: raw }
+impl Tree {
+    pub(super) unsafe fn from_raw(raw: NonNull<SyntaxTreeData>) -> Tree {
+        Tree { ptr: raw }
     }
 
     pub(super) fn as_raw(&self) -> NonNull<SyntaxTreeData> {
         self.ptr
     }
 
-    pub fn root_node(&self) -> SyntaxTreeNode<'_> {
-        unsafe { SyntaxTreeNode::from_raw(ts_tree_root_node(self.ptr)).unwrap() }
+    pub fn root_node(&self) -> Node<'_> {
+        unsafe { Node::from_raw(ts_tree_root_node(self.ptr)).unwrap() }
     }
 
     pub fn edit(&mut self, edit: &InputEdit) {
@@ -29,22 +29,22 @@ impl SyntaxTree {
     }
 }
 
-impl fmt::Debug for SyntaxTree {
+impl fmt::Debug for Tree {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{Tree {:?}}}", self.root_node())
     }
 }
 
-impl Drop for SyntaxTree {
+impl Drop for Tree {
     fn drop(&mut self) {
         unsafe { ts_tree_delete(self.ptr) }
     }
 }
 
-impl Clone for SyntaxTree {
+impl Clone for Tree {
     fn clone(&self) -> Self {
         unsafe {
-            SyntaxTree {
+            Tree {
                 ptr: ts_tree_copy(self.ptr),
             }
         }

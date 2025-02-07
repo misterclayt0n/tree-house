@@ -3,8 +3,8 @@ use std::cell::Cell;
 use std::marker::PhantomData;
 use std::{fmt, mem};
 
-use crate::syntax_tree_node::SyntaxTreeNodeRaw;
-use crate::{SyntaxTree, SyntaxTreeNode};
+use crate::node::SyntaxTreeNodeRaw;
+use crate::{Node, Tree};
 
 thread_local! {
     static CACHE: Cell<Option<TreeCursorGuard>> = const { Cell::new(None) };
@@ -29,11 +29,11 @@ impl Drop for TreeCursorGuard {
 
 pub struct TreeCursor<'a> {
     inner: TreeCursorRaw,
-    tree: PhantomData<&'a SyntaxTree>,
+    tree: PhantomData<&'a Tree>,
 }
 
 impl<'tree> TreeCursor<'tree> {
-    pub fn new(node: &SyntaxTreeNode<'tree>) -> Self {
+    pub fn new(node: &Node<'tree>) -> Self {
         Self {
             inner: match CACHE.take() {
                 Some(guard) => unsafe {
@@ -68,10 +68,8 @@ impl<'tree> TreeCursor<'tree> {
         unsafe { ts_tree_cursor_goto_last_child(&mut self.inner) }
     }
 
-    pub fn node(&self) -> SyntaxTreeNode<'tree> {
-        unsafe {
-            SyntaxTreeNode::from_raw(ts_tree_cursor_current_node(&self.inner)).unwrap_unchecked()
-        }
+    pub fn node(&self) -> Node<'tree> {
+        unsafe { Node::from_raw(ts_tree_cursor_current_node(&self.inner)).unwrap_unchecked() }
     }
 }
 

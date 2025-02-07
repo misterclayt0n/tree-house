@@ -7,7 +7,7 @@ use std::{fmt, mem, ptr};
 
 use regex_cursor::Cursor;
 
-use crate::syntax_tree::{SyntaxTree, SyntaxTreeData};
+use crate::tree::{SyntaxTreeData, Tree};
 use crate::{Grammar, Input, IntoInput, Point, Range};
 
 // opaque data
@@ -84,8 +84,8 @@ impl Parser {
     pub fn parse<I: Input>(
         &mut self,
         input: impl IntoInput<Input = I>,
-        old_tree: Option<&SyntaxTree>,
-    ) -> Option<SyntaxTree> {
+        old_tree: Option<&Tree>,
+    ) -> Option<Tree> {
         let mut input = input.into_input();
         unsafe extern "C" fn read<C: Input>(
             payload: NonNull<c_void>,
@@ -137,7 +137,7 @@ impl Parser {
         unsafe {
             let old_tree = old_tree.map(|tree| tree.as_raw());
             let new_tree = ts_parser_parse_with_options(self.ptr, old_tree, input, options);
-            new_tree.map(|raw| SyntaxTree::from_raw(raw))
+            new_tree.map(|raw| Tree::from_raw(raw))
         }
     }
 }

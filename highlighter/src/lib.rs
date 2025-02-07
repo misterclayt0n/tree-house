@@ -4,7 +4,7 @@ use slab::Slab;
 
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
-use tree_sitter::{SyntaxTree, SyntaxTreeNode};
+use tree_sitter::{Node, Tree};
 
 pub use crate::config::{read_query, LanguageConfig, LanguageLoader};
 pub use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
@@ -125,33 +125,25 @@ impl Syntax {
         &mut self.layers[layer.idx()]
     }
 
-    pub fn tree(&self) -> &SyntaxTree {
+    pub fn tree(&self) -> &Tree {
         self.layer(self.root).tree()
     }
 
     #[inline]
-    pub fn tree_for_byte_range(&self, start: usize, end: usize) -> &SyntaxTree {
+    pub fn tree_for_byte_range(&self, start: usize, end: usize) -> &Tree {
         let layer = self.layer_for_byte_range(start, end);
         self.layer(layer).tree()
     }
 
     #[inline]
-    pub fn named_descendant_for_byte_range(
-        &self,
-        start: usize,
-        end: usize,
-    ) -> Option<SyntaxTreeNode<'_>> {
+    pub fn named_descendant_for_byte_range(&self, start: usize, end: usize) -> Option<Node<'_>> {
         self.tree_for_byte_range(start, end)
             .root_node()
             .named_descendant_for_byte_range(start as u32, end as u32)
     }
 
     #[inline]
-    pub fn descendant_for_byte_range(
-        &self,
-        start: usize,
-        end: usize,
-    ) -> Option<SyntaxTreeNode<'_>> {
+    pub fn descendant_for_byte_range(&self, start: usize, end: usize) -> Option<Node<'_>> {
         self.tree_for_byte_range(start, end)
             .root_node()
             .descendant_for_byte_range(start as u32, end as u32)
@@ -190,7 +182,7 @@ pub struct Injection {
 #[derive(Debug)]
 pub struct LayerData {
     pub language: Language,
-    parse_tree: Option<SyntaxTree>,
+    parse_tree: Option<Tree>,
     ranges: Vec<tree_sitter::Range>,
     /// a list of **sorted** non-overlapping injection ranges. Note that
     /// injection ranges are not relative to the start of this layer but the
@@ -224,7 +216,7 @@ impl Hash for LayerData {
 }
 
 impl LayerData {
-    pub fn tree(&self) -> &SyntaxTree {
+    pub fn tree(&self) -> &Tree {
         // TODO: no unwrap
         self.parse_tree.as_ref().unwrap()
     }

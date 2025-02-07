@@ -5,13 +5,13 @@ use std::iter;
 use ropey::RopeSlice;
 
 use crate::TREE_SITTER_MATCH_LIMIT;
-use tree_sitter::{InactiveQueryCursor, Query, RopeInput, SyntaxTreeNode};
+use tree_sitter::{InactiveQueryCursor, Query, RopeInput, Node};
 
 #[derive(Debug)]
 pub enum CapturedNode<'a> {
-    Single(SyntaxTreeNode<'a>),
+    Single(Node<'a>),
     /// Guaranteed to be not empty
-    Grouped(Vec<SyntaxTreeNode<'a>>),
+    Grouped(Vec<Node<'a>>),
 }
 
 impl CapturedNode<'_> {
@@ -55,7 +55,7 @@ impl TextObjectQuery {
     pub fn capture_nodes<'a>(
         &'a self,
         capture_name: &str,
-        node: SyntaxTreeNode<'a>,
+        node: Node<'a>,
         slice: RopeSlice<'a>,
         cursor: InactiveQueryCursor,
     ) -> Option<impl Iterator<Item = CapturedNode<'a>>> {
@@ -67,7 +67,7 @@ impl TextObjectQuery {
     pub fn capture_nodes_any<'a>(
         &'a self,
         capture_names: &[&str],
-        node: SyntaxTreeNode<'a>,
+        node: Node<'a>,
         slice: RopeSlice<'a>,
         mut cursor: InactiveQueryCursor,
     ) -> Option<impl Iterator<Item = CapturedNode<'a>>> {

@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::ops::Range;
 use std::ptr::NonNull;
 
-use crate::syntax_tree::SyntaxTree;
+use crate::tree::Tree;
 use crate::tree_cursor::TreeCursor;
 use crate::Grammar;
 
@@ -15,8 +15,8 @@ pub(super) struct SyntaxTreeNodeRaw {
     tree: *const c_void,
 }
 
-impl From<SyntaxTreeNode<'_>> for SyntaxTreeNodeRaw {
-    fn from(node: SyntaxTreeNode) -> SyntaxTreeNodeRaw {
+impl From<Node<'_>> for SyntaxTreeNodeRaw {
+    fn from(node: Node) -> SyntaxTreeNodeRaw {
         SyntaxTreeNodeRaw {
             context: node.context,
             id: node.id.as_ptr(),
@@ -27,17 +27,17 @@ impl From<SyntaxTreeNode<'_>> for SyntaxTreeNodeRaw {
 
 #[derive(Debug, Clone)]
 #[repr(C)]
-pub struct SyntaxTreeNode<'tree> {
+pub struct Node<'tree> {
     context: [u32; 4],
     id: NonNull<c_void>,
     tree: NonNull<c_void>,
-    _phantom: PhantomData<&'tree SyntaxTree>,
+    _phantom: PhantomData<&'tree Tree>,
 }
 
-impl<'tree> SyntaxTreeNode<'tree> {
+impl<'tree> Node<'tree> {
     #[inline]
     pub(super) unsafe fn from_raw(raw: SyntaxTreeNodeRaw) -> Option<Self> {
-        Some(SyntaxTreeNode {
+        Some(Node {
             context: raw.context,
             id: NonNull::new(raw.id as *mut _)?,
             tree: unsafe { NonNull::new_unchecked(raw.tree as *mut _) },
@@ -109,8 +109,8 @@ impl<'tree> SyntaxTreeNode<'tree> {
     /// you might be iterating over a long list of children, you should use
     /// [`SyntaxTreeNode::children`] instead.
     #[inline]
-    pub fn child(&self, i: u32) -> Option<SyntaxTreeNode<'tree>> {
-        unsafe { SyntaxTreeNode::from_raw(ts_node_child(self.as_raw(), i)) }
+    pub fn child(&self, i: u32) -> Option<Node<'tree>> {
+        unsafe { Node::from_raw(ts_node_child(self.as_raw(), i)) }
     }
 
     /// Get this node's number of children.
@@ -126,8 +126,8 @@ impl<'tree> SyntaxTreeNode<'tree> {
     /// you might be iterating over a long list of children, you should use
     /// [`SyntaxTreeNode::named_children`] instead.
     #[inline]
-    pub fn named_child(&self, i: u32) -> Option<SyntaxTreeNode<'tree>> {
-        unsafe { SyntaxTreeNode::from_raw(ts_node_named_child(self.as_raw(), i)) }
+    pub fn named_child(&self, i: u32) -> Option<Node<'tree>> {
+        unsafe { Node::from_raw(ts_node_named_child(self.as_raw(), i)) }
     }
 
     /// Get this node's number of *named* children.
@@ -142,8 +142,8 @@ impl<'tree> SyntaxTreeNode<'tree> {
     unsafe fn map(
         &self,
         f: unsafe extern "C" fn(SyntaxTreeNodeRaw) -> SyntaxTreeNodeRaw,
-    ) -> Option<SyntaxTreeNode<'tree>> {
-        SyntaxTreeNode::from_raw(f(self.as_raw()))
+    ) -> Option<Node<'tree>> {
+        Node::from_raw(f(self.as_raw()))
     }
 
     /// Get this node's immediate parent.
@@ -202,7 +202,7 @@ impl<'tree> SyntaxTreeNode<'tree> {
     ///
     /// If you're walking the tree recursively, you may want to use the
     /// [`TreeCursor`] APIs directly instead.
-    pub fn children(&self) -> impl ExactSizeIterator<Item = SyntaxTreeNode<'tree>> {
+    pub fn children(&self) -> impl ExactSizeIterator<Item = Node<'tree>> {
         let mut cursor = TreeCursor::new(self);
         cursor.goto_first_child();
         (0..self.child_count()).map(move |_| {
@@ -213,8 +213,8 @@ impl<'tree> SyntaxTreeNode<'tree> {
     }
 }
 
-unsafe impl Send for SyntaxTreeNode<'_> {}
-unsafe impl Sync for SyntaxTreeNode<'_> {}
+unsafe impl Send for Node<'_> {}
+unsafe impl Sync for Node<'_> {}
 
 extern "C" {
     /// Get the node's type as a numerical id.

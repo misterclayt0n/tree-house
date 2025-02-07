@@ -13,8 +13,7 @@ use crate::parse::LayerUpdateFlags;
 use crate::{Injection, Language, Layer, LayerData, Range, Syntax, TREE_SITTER_MATCH_LIMIT};
 use tree_sitter::query::UserPredicate;
 use tree_sitter::{
-    query, Capture, Grammar, InactiveQueryCursor, MatchedNodeIdx, Pattern, Query, QueryMatch,
-    SyntaxTreeNode,
+    query, Capture, Grammar, InactiveQueryCursor, MatchedNodeIdx, Node, Pattern, Query, QueryMatch,
 };
 
 const SHEBANG: &str = r"#!\s*(?:\S*[/\\](?:env\s+(?:\-\S+\s+)*)?)?([^\s\.\d]+)";
@@ -55,7 +54,7 @@ pub struct InjectionQueryMatch<'tree> {
     include_children: IncludedChildren,
     language: Language,
     scope: Option<InjectionScope>,
-    node: SyntaxTreeNode<'tree>,
+    node: Node<'tree>,
     last_match: bool,
     pattern: Pattern,
 }
@@ -240,7 +239,7 @@ impl InjectionsQuery {
     /// This case should be handled by the calling function
     fn execute<'a>(
         &'a self,
-        node: &SyntaxTreeNode<'a>,
+        node: &Node<'a>,
         source: RopeSlice<'a>,
         loader: &'a impl LanguageLoader,
     ) -> impl Iterator<Item = InjectionQueryMatch<'a>> + 'a {
@@ -541,7 +540,7 @@ impl Syntax {
 
 fn intersect_ranges(
     include_children: IncludedChildren,
-    node: SyntaxTreeNode,
+    node: Node,
     parent_ranges: &[tree_sitter::Range],
     push_range: impl FnMut(Range),
 ) {

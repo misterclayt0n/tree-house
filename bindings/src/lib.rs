@@ -1,9 +1,9 @@
 mod grammar;
+mod node;
 mod parser;
 pub mod query;
 mod query_cursor;
-mod syntax_tree;
-mod syntax_tree_node;
+mod tree;
 mod tree_cursor;
 
 #[cfg(feature = "ropey")]
@@ -14,11 +14,11 @@ pub use ropey::RopeInput;
 use std::ops;
 
 pub use grammar::Grammar;
+pub use node::Node;
 pub use parser::{Parser, ParserInputRaw};
 pub use query::{Capture, Pattern, Query, QueryStr};
 pub use query_cursor::{InactiveQueryCursor, MatchedNode, MatchedNodeIdx, QueryCursor, QueryMatch};
-pub use syntax_tree::{InputEdit, SyntaxTree};
-pub use syntax_tree_node::SyntaxTreeNode;
+pub use tree::{InputEdit, Tree};
 pub use tree_cursor::TreeCursor;
 
 #[repr(C)]

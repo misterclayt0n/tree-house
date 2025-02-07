@@ -5,9 +5,9 @@ use std::mem;
 use std::ops::Range;
 use std::ptr::{self, NonNull};
 
+use crate::node::SyntaxTreeNodeRaw;
 use crate::query::{Capture, Pattern, Query, QueryData};
-use crate::syntax_tree_node::SyntaxTreeNodeRaw;
-use crate::{Input, IntoInput, SyntaxTree, SyntaxTreeNode};
+use crate::{Input, IntoInput, Node, Tree};
 
 enum QueryCursorData {}
 
@@ -23,7 +23,7 @@ unsafe fn with_cache<T>(f: impl FnOnce(&mut Vec<InactiveQueryCursor>) -> T) -> T
 pub struct QueryCursor<'a, 'tree, I: Input> {
     query: &'a Query,
     ptr: NonNull<QueryCursorData>,
-    tree: PhantomData<&'tree SyntaxTree>,
+    tree: PhantomData<&'tree Tree>,
     input: I,
 }
 
@@ -176,7 +176,7 @@ impl InactiveQueryCursor {
     pub fn execute_query<'a, 'tree, I: IntoInput>(
         self,
         query: &'a Query,
-        node: &SyntaxTreeNode<'tree>,
+        node: &Node<'tree>,
         input: I,
     ) -> QueryCursor<'a, 'tree, I::Input> {
         let ptr = self.ptr;
@@ -208,7 +208,7 @@ pub type MatchedNodeIdx = u32;
 #[repr(C)]
 #[derive(Clone)]
 pub struct MatchedNode<'tree> {
-    pub syntax_node: SyntaxTreeNode<'tree>,
+    pub syntax_node: Node<'tree>,
     pub capture: Capture,
 }
 
@@ -217,7 +217,7 @@ pub struct QueryMatch<'cursor, 'tree> {
     pattern: Pattern,
     matched_nodes: &'cursor [MatchedNode<'tree>],
     query_cursor: &'cursor mut QueryCursorData,
-    _tree: PhantomData<&'tree super::SyntaxTree>,
+    _tree: PhantomData<&'tree super::Tree>,
 }
 
 impl<'tree> QueryMatch<'_, 'tree> {
@@ -225,10 +225,7 @@ impl<'tree> QueryMatch<'_, 'tree> {
         self.matched_nodes.iter()
     }
 
-    pub fn nodes_for_capture(
-        &self,
-        capture: Capture,
-    ) -> impl Iterator<Item = &SyntaxTreeNode<'tree>> {
+    pub fn nodes_for_capture(&self, capture: Capture) -> impl Iterator<Item = &Node<'tree>> {
         self.matched_nodes
             .iter()
             .filter(move |mat| mat.capture == capture)
