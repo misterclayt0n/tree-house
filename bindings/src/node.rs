@@ -211,7 +211,19 @@ impl<'tree> Node<'tree> {
             result
         })
     }
+
+    pub fn walk(&self) -> TreeCursor<'tree> {
+        TreeCursor::new(self)
+    }
 }
+
+impl PartialEq for Node<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Node<'_> {}
 
 unsafe impl Send for Node<'_> {}
 unsafe impl Sync for Node<'_> {}

@@ -33,7 +33,7 @@ pub struct TreeCursor<'a> {
 }
 
 impl<'tree> TreeCursor<'tree> {
-    pub fn new(node: &Node<'tree>) -> Self {
+    pub(crate) fn new(node: &Node<'tree>) -> Self {
         Self {
             inner: match CACHE.take() {
                 Some(guard) => unsafe {
@@ -66,6 +66,13 @@ impl<'tree> TreeCursor<'tree> {
 
     pub fn goto_last_child(&mut self) -> bool {
         unsafe { ts_tree_cursor_goto_last_child(&mut self.inner) }
+    }
+
+    pub fn goto_first_child_for_byte(&mut self, byte_idx: u32) -> Option<u32> {
+        match unsafe { ts_tree_cursor_goto_first_child_for_byte(&mut self.inner, byte_idx) } {
+            -1 => None,
+            n => Some(n as u32),
+        }
     }
 
     pub fn node(&self) -> Node<'tree> {
@@ -157,11 +164,11 @@ extern "C" {
     /// Get the depth of the cursor's current node relative to the original
     /// node that the cursor was constructed with.
     fn ts_tree_cursor_current_depth(self_: *const TreeCursorRaw) -> u32;
+    */
     /// Move the cursor to the first child of its current node that extends beyond
     /// the given byte offset or point.
     /// This returns the index of the child node if one was found, and returns -1
     /// if no such child was found.
     fn ts_tree_cursor_goto_first_child_for_byte(self_: *mut TreeCursorRaw, goal_byte: u32) -> i64;
-    */
     fn ts_tree_cursor_copy(cursor: *const TreeCursorRaw) -> TreeCursorRaw;
 }

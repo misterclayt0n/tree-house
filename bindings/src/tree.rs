@@ -2,7 +2,7 @@ use std::fmt;
 use std::ptr::NonNull;
 
 use crate::node::{Node, SyntaxTreeNodeRaw};
-use crate::Point;
+use crate::{Point, TreeCursor};
 
 // opaque pointers
 pub(super) enum SyntaxTreeData {}
@@ -26,6 +26,10 @@ impl Tree {
 
     pub fn edit(&mut self, edit: &InputEdit) {
         unsafe { ts_tree_edit(self.ptr, edit) }
+    }
+
+    pub fn walk(&self) -> TreeCursor<'_> {
+        self.root_node().walk()
     }
 }
 
