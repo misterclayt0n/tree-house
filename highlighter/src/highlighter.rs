@@ -64,7 +64,7 @@ impl HighlightQuery {
 pub struct Highlight(pub u32);
 
 impl Highlight {
-    pub(crate) const NONE: Highlight = Highlight(u32::MAX);
+    pub const NONE: Highlight = Highlight(u32::MAX);
 }
 
 #[derive(Debug)]
