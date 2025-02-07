@@ -2,10 +2,12 @@ use std::mem::replace;
 use std::ops::RangeBounds;
 use std::path::Path;
 use std::slice;
+use std::sync::Arc;
 
 use crate::config::{LanguageConfig, LanguageLoader};
 use crate::query_iter::{MatchedNode, QueryIter, QueryIterEvent, QueryLoader};
 use crate::{Language, Layer, Syntax};
+use arc_swap::ArcSwap;
 use ropey::RopeSlice;
 use tree_sitter::query::Query;
 use tree_sitter::{query, Grammar};
@@ -16,7 +18,7 @@ use tree_sitter::{query, Grammar};
 #[derive(Debug)]
 pub struct HighlightQuery {
     pub query: Query,
-    pub(crate) highlight_indices: Vec<Highlight>,
+    pub(crate) highlight_indices: ArcSwap<Vec<Highlight>>,
 }
 
 impl HighlightQuery {
@@ -29,7 +31,10 @@ impl HighlightQuery {
             Err(format!("unsupported predicate {predicate}").into())
         })?;
         Ok(Self {
-            highlight_indices: vec![Highlight::NONE; query.num_captures() as usize],
+            highlight_indices: ArcSwap::from_pointee(vec![
+                Highlight::NONE;
+                query.num_captures() as usize
+            ]),
             query,
         })
     }
@@ -50,12 +55,13 @@ impl HighlightQuery {
     /// When highlighting, results are returned as `Highlight` values, configured by this function.
     /// The meaning of these indices is up to the user of the implementation. The highlighter
     /// treats the indices as entirely opaque.
-    pub fn configure(&mut self, mut f: impl FnMut(&str) -> Highlight) {
-        self.highlight_indices = self
+    pub fn configure(&self, mut f: impl FnMut(&str) -> Highlight) {
+        let highlight_indices = self
             .query
             .captures()
             .map(move |(_, capture_name)| f(capture_name))
             .collect();
+        self.highlight_indices.store(Arc::new(highlight_indices));
     }
 }
 
@@ -233,7 +239,8 @@ impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
         {
             self.active_highlights.pop();
         }
-        let highlight = self.active_config.highlight_query.highlight_indices[node.capture.idx()];
+        let highlight =
+            self.active_config.highlight_query.highlight_indices.load()[node.capture.idx()];
         if highlight != Highlight::NONE {
             self.active_highlights.push(HighlightedNode {
                 end: node.byte_range.end,

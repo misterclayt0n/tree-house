@@ -170,7 +170,7 @@ impl LanguageLoader for TestLanguageLoader {
 
     fn get_config(&self, lang: Language) -> &LanguageConfig {
         self.lang_config[lang.idx()].get_or_init(|| {
-            let mut config = get_grammar(
+            let config = get_grammar(
                 self.languages.get_index(lang.idx()).unwrap().0,
                 &self.overwrites[lang.idx()],
             );
