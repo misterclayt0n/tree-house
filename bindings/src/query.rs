@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::{slice, str};
 
-use crate::query::predicate::{InvalidPredicateError, Predicate, TextPredicate};
+use crate::query::predicate::TextPredicate;
+pub use crate::query::predicate::{InvalidPredicateError, Predicate};
 use crate::Grammar;
 
 mod predicate;
