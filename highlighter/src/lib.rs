@@ -131,33 +131,33 @@ impl Syntax {
     }
 
     #[inline]
-    pub fn tree_for_byte_range(&self, start: usize, end: usize) -> &Tree {
+    pub fn tree_for_byte_range(&self, start: u32, end: u32) -> &Tree {
         let layer = self.layer_for_byte_range(start, end);
         self.layer(layer).tree()
     }
 
     #[inline]
-    pub fn named_descendant_for_byte_range(&self, start: usize, end: usize) -> Option<Node<'_>> {
+    pub fn named_descendant_for_byte_range(&self, start: u32, end: u32) -> Option<Node<'_>> {
         self.tree_for_byte_range(start, end)
             .root_node()
-            .named_descendant_for_byte_range(start as u32, end as u32)
+            .named_descendant_for_byte_range(start, end)
     }
 
     #[inline]
-    pub fn descendant_for_byte_range(&self, start: usize, end: usize) -> Option<Node<'_>> {
+    pub fn descendant_for_byte_range(&self, start: u32, end: u32) -> Option<Node<'_>> {
         self.tree_for_byte_range(start, end)
             .root_node()
-            .descendant_for_byte_range(start as u32, end as u32)
+            .descendant_for_byte_range(start, end)
     }
 
-    pub fn layer_for_byte_range(&self, start: usize, end: usize) -> Layer {
+    pub fn layer_for_byte_range(&self, start: u32, end: u32) -> Layer {
         let mut cursor = self.root;
         loop {
             let layer = &self.layers[cursor.idx()];
-            let Some(start_injection) = layer.injection_at_byte_idx(start as u32) else {
+            let Some(start_injection) = layer.injection_at_byte_idx(start) else {
                 break;
             };
-            let Some(end_injection) = layer.injection_at_byte_idx(end as u32) else {
+            let Some(end_injection) = layer.injection_at_byte_idx(end) else {
                 break;
             };
             if start_injection.layer == end_injection.layer {
