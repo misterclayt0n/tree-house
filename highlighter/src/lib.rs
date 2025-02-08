@@ -2,6 +2,7 @@ use ropey::RopeSlice;
 
 use slab::Slab;
 
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 use tree_sitter::{Node, Tree};
@@ -246,9 +247,19 @@ impl LayerData {
 pub enum Error {
     Timeout,
     ExceededMaximumSize,
-    InvalidLanguage,
     InvalidRanges,
     Unknown,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Timeout => f.write_str("configured timeout was exceeded"),
+            Self::ExceededMaximumSize => f.write_str("input text exceeds the maximum allowed size"),
+            Self::InvalidRanges => f.write_str("invalid ranges"),
+            Self::Unknown => f.write_str("an unknown error occurred"),
+        }
+    }
 }
 
 /// The maximum number of in-progress matches a TS cursor can consider at once.
