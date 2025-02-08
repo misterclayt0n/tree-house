@@ -29,10 +29,10 @@ impl Display for UserPredicate<'_> {
         match *self {
             UserPredicate::IsPropertySet { negate, key, val } => {
                 let predicate = if negate { "is-not?" } else { "is?" };
-                write!(f, " ({predicate} {key} {})", val.unwrap_or(""))
+                write!(f, " (#{predicate} {key} {})", val.unwrap_or(""))
             }
             UserPredicate::SetProperty { key, val } => {
-                write!(f, "(set! {key} {})", val.unwrap_or(""))
+                write!(f, "(#set! {key} {})", val.unwrap_or(""))
             }
             UserPredicate::Other(ref predicate) => {
                 write!(f, "{}", predicate.name())
