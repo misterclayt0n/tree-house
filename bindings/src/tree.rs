@@ -55,6 +55,9 @@ impl Clone for Tree {
     }
 }
 
+unsafe impl Send for Tree {}
+unsafe impl Sync for Tree {}
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct InputEdit {
