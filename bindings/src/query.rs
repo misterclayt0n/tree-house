@@ -300,7 +300,7 @@ impl Capture {
     }
 }
 
-/// A reference to a string stroed in a query
+/// A reference to a string stored in a query
 #[derive(Clone, Copy, Debug)]
 pub struct QueryStr(u32);
 

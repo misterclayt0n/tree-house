@@ -97,7 +97,6 @@ impl InjectionsQuery {
         let mut injection_properties: HashMap<Pattern, InjectionProperties> = HashMap::new();
         let query = Query::new(grammar, query_text, query_path, |pattern, predicate| {
             match predicate {
-                // "injection.include-unnamed-children"
                 UserPredicate::SetProperty {
                     key: "injection.include-unnamed-children",
                     val: None,
