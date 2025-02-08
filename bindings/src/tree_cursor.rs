@@ -1,5 +1,6 @@
 use ::std::os::raw;
 use std::cell::Cell;
+use std::ffi::{c_char, CStr};
 use std::marker::PhantomData;
 use std::{fmt, mem};
 
@@ -77,6 +78,13 @@ impl<'tree> TreeCursor<'tree> {
 
     pub fn node(&self) -> Node<'tree> {
         unsafe { Node::from_raw(ts_tree_cursor_current_node(&self.inner)).unwrap_unchecked() }
+    }
+
+    pub fn field_name(&self) -> Option<&'tree str> {
+        unsafe {
+            let ptr = ts_tree_cursor_current_field_name(&self.inner);
+            (!ptr.is_null()).then(|| CStr::from_ptr(ptr).to_str().unwrap())
+        }
     }
 }
 
@@ -171,4 +179,9 @@ extern "C" {
     /// if no such child was found.
     fn ts_tree_cursor_goto_first_child_for_byte(self_: *mut TreeCursorRaw, goal_byte: u32) -> i64;
     fn ts_tree_cursor_copy(cursor: *const TreeCursorRaw) -> TreeCursorRaw;
+    /// Get the field name of the tree cursor's curren tnode.
+    ///
+    /// This returns `NULL` if the current node doesn't have a field. See also
+    /// `ts_node_child_by_field_name`.
+    fn ts_tree_cursor_current_field_name(cursor: *const TreeCursorRaw) -> *const c_char;
 }
