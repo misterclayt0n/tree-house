@@ -1,4 +1,4 @@
-use std::ffi::c_void;
+use std::ffi::{c_char, c_void, CStr};
 use std::marker::PhantomData;
 use std::ops::Range;
 use std::ptr::NonNull;
@@ -52,6 +52,18 @@ impl<'tree> Node<'tree> {
             id: self.id.as_ptr(),
             tree: self.tree.as_ptr(),
         }
+    }
+
+    pub fn id(&self) -> usize {
+        self.id.as_ptr() as usize
+    }
+
+    /// Get this node's type as a string
+    #[inline]
+    pub fn kind(&self) -> &'tree str {
+        unsafe { CStr::from_ptr(ts_node_type(self.as_raw())) }
+            .to_str()
+            .unwrap()
     }
 
     /// Get this node's type as a numerical id.
@@ -229,6 +241,9 @@ unsafe impl Send for Node<'_> {}
 unsafe impl Sync for Node<'_> {}
 
 extern "C" {
+    /// Get the node's type as a null-terminated string.
+    fn ts_node_type(node: SyntaxTreeNodeRaw) -> *const c_char;
+
     /// Get the node's type as a numerical id.
     fn ts_node_symbol(node: SyntaxTreeNodeRaw) -> u16;
 
