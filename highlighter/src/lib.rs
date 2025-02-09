@@ -119,12 +119,16 @@ impl Syntax {
         syntax.update(source, timeout, &[], loader).map(|_| syntax)
     }
 
-    fn layer(&self, layer: Layer) -> &LayerData {
+    pub fn layer(&self, layer: Layer) -> &LayerData {
         &self.layers[layer.idx()]
     }
 
     fn layer_mut(&mut self, layer: Layer) -> &mut LayerData {
         &mut self.layers[layer.idx()]
+    }
+
+    pub fn root(&self) -> Layer {
+        self.root
     }
 
     pub fn tree(&self) -> &Tree {
