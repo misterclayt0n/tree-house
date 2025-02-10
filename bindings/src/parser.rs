@@ -67,7 +67,7 @@ impl Parser {
     /// `ranges` must be non-overlapping and sorted.
     pub fn set_included_ranges(&mut self, ranges: &[Range]) -> Result<(), InvalidRangesError> {
         // TODO: save some memory by only storing byte ranges and converting them to TS ranges in an
-        // internal buffer here. Points are not used by TS. Alternatively we can path the TS C code
+        // internal buffer here. Points are not used by TS. Alternatively we can patch the TS C code
         // to accept a simple pair (struct with two fields) of byte positions here instead of a full
         // tree sitter range
         let success = unsafe {

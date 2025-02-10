@@ -31,7 +31,7 @@ impl Syntax {
         queue.push(self.root);
 
         let mut parser = Parser::new();
-        parser.set_timeout(timeout); // half a second is pretty generous
+        parser.set_timeout(timeout);
         let mut cursor = InactiveQueryCursor::new();
         // TODO: might need to set cursor range
         cursor.set_byte_range(0..u32::MAX);
@@ -43,7 +43,8 @@ impl Syntax {
                 if layer_data.flags.moved || layer_data.flags.modified {
                     for edit in edits.iter().rev() {
                         // Apply the edits in reverse.
-                        // If we applied them in order then edit 1 would disrupt the positioning of edit 2.
+                        // If we applied them in order then edit 1 would disrupt the positioning
+                        // of edit 2.
                         tree.edit(edit);
                     }
                 }

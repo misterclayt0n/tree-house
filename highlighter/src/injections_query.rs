@@ -424,10 +424,11 @@ impl Syntax {
         layer_data.injections = injections;
     }
 
-    /// maps the layers injection ranges trough edits to enable incremental reparse
+    /// Maps the layers injection ranges through edits to enable incremental re-parsing.
     fn map_injections(
         &mut self,
         layer: Layer,
+        // TODO: drop this parameter?
         offset: Option<i32>,
         mut edits: &[tree_sitter::InputEdit],
     ) {
