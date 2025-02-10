@@ -168,8 +168,8 @@ impl LanguageLoader for TestLanguageLoader {
         self.languages.get(*name).copied()
     }
 
-    fn get_config(&self, lang: Language) -> &LanguageConfig {
-        self.lang_config[lang.idx()].get_or_init(|| {
+    fn get_config(&self, lang: Language) -> Option<&LanguageConfig> {
+        let config = self.lang_config[lang.idx()].get_or_init(|| {
             let config = get_grammar(
                 self.languages.get_index(lang.idx()).unwrap().0,
                 &self.overwrites[lang.idx()],
@@ -179,7 +179,8 @@ impl LanguageLoader for TestLanguageLoader {
                 .highlight_query
                 .configure(|scope| Highlight(theme.insert_full(scope.to_owned()).0 as u32));
             config
-        })
+        });
+        Some(config)
     }
 }
 

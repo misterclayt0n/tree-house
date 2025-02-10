@@ -321,10 +321,13 @@ impl Syntax {
     ) {
         self.map_injections(layer, None, edits);
         let layer_data = &mut self.layer_mut(layer);
-        let LanguageConfig {
+        let Some(LanguageConfig {
             ref injections_query,
             ..
-        } = *loader.get_config(layer_data.language);
+        }) = loader.get_config(layer_data.language)
+        else {
+            return;
+        };
         if injections_query.injection_content_capture.is_none() {
             return;
         }

@@ -91,7 +91,7 @@ pub struct Highlighter<'a, Loader: LanguageLoader> {
     active_highlights: Vec<HighlightedNode>,
     next_highlight_end: u32,
     next_highlight_start: u32,
-    active_config: &'a LanguageConfig,
+    active_config: Option<&'a LanguageConfig>,
 }
 
 pub struct HighlightList<'a>(slice::Iter<'a, HighlightedNode>);
@@ -239,8 +239,9 @@ impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
         {
             self.active_highlights.pop();
         }
-        let highlight =
-            self.active_config.highlight_query.highlight_indices.load()[node.capture.idx()];
+        let highlight = self.active_config.map_or(Highlight::NONE, |config| {
+            config.highlight_query.highlight_indices.load()[node.capture.idx()]
+        });
         if highlight != Highlight::NONE {
             self.active_highlights.push(HighlightedNode {
                 end: node.byte_range.end,
@@ -254,7 +255,9 @@ impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
 pub(crate) struct HighlightQueryLoader<T>(T);
 
 impl<'a, T: LanguageLoader> QueryLoader<'a> for HighlightQueryLoader<&'a T> {
-    fn get_query(&mut self, lang: Language) -> &'a Query {
-        &self.0.get_config(lang).highlight_query.query
+    fn get_query(&mut self, lang: Language) -> Option<&'a Query> {
+        self.0
+            .get_config(lang)
+            .map(|config| &config.highlight_query.query)
     }
 }

@@ -16,14 +16,14 @@ pub struct MatchedNode {
 }
 
 struct LayerQueryIter<'a> {
-    cursor: QueryCursor<'a, 'a, RopeInput<'a>>,
+    cursor: Option<QueryCursor<'a, 'a, RopeInput<'a>>>,
     peeked: Option<MatchedNode>,
 }
 
 impl LayerQueryIter<'_> {
     fn peek(&mut self) -> Option<&MatchedNode> {
         if self.peeked.is_none() {
-            let (query_match, node_idx) = self.cursor.next_matched_node()?;
+            let (query_match, node_idx) = self.cursor.as_mut()?.next_matched_node()?;
             let matched_node = query_match.matched_node(node_idx);
             self.peeked = Some(MatchedNode {
                 capture: matched_node.capture,
@@ -72,11 +72,9 @@ where
                 let mut cursor = InactiveQueryCursor::new();
                 cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
                 cursor.set_byte_range(self.range.clone());
-                let cursor = InactiveQueryCursor::new().execute_query(
-                    self.loader.get_query(layer.language),
-                    &node,
-                    RopeInput::new(self.src),
-                );
+                let cursor = self.loader.get_query(layer.language).map(|query| {
+                    InactiveQueryCursor::new().execute_query(query, &node, RopeInput::new(self.src))
+                });
                 Box::new(ActiveLayer {
                     state: S::default(),
                     query_iter: LayerQueryIter {
@@ -286,14 +284,14 @@ impl<S> QueryIterEvent<S> {
 }
 
 pub trait QueryLoader<'a> {
-    fn get_query(&mut self, lang: Language) -> &'a Query;
+    fn get_query(&mut self, lang: Language) -> Option<&'a Query>;
 }
 
 impl<'a, F> QueryLoader<'a> for F
 where
-    F: FnMut(Language) -> &'a Query,
+    F: FnMut(Language) -> Option<&'a Query>,
 {
-    fn get_query(&mut self, lang: Language) -> &'a Query {
+    fn get_query(&mut self, lang: Language) -> Option<&'a Query> {
         (self)(lang)
     }
 }

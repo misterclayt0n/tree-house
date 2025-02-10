@@ -170,10 +170,13 @@ impl LayerData {
         source: RopeSlice,
         loader: &impl LanguageLoader,
     ) -> Result<(), Error> {
+        let Some(config) = loader.get_config(self.language) else {
+            return Ok(());
+        };
+        parser.set_grammar(config.grammar);
         parser
             .set_included_ranges(&self.ranges)
             .map_err(|_| Error::InvalidRanges)?;
-        parser.set_grammar(loader.get_config(self.language).grammar);
         let tree = parser
             .parse(source, self.parse_tree.as_ref())
             .ok_or(Error::Timeout)?;
