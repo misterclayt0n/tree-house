@@ -23,7 +23,11 @@ impl Syntax {
         }
 
         let mut queue = Vec::with_capacity(32);
-        self.layer_mut(self.root).flags.touched = true;
+        let root_flags = &mut self.layer_mut(self.root).flags;
+        // The root layer is always considered.
+        root_flags.touched = true;
+        // If there was an edit then the root layer must've been modified.
+        root_flags.modified = true;
         queue.push(self.root);
 
         let mut parser = Parser::new();
