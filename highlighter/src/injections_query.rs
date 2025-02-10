@@ -91,8 +91,8 @@ pub struct InjectionsQuery {
 impl InjectionsQuery {
     pub fn new(
         grammar: Grammar,
-        query_path: impl AsRef<Path>,
         query_text: &str,
+        query_path: impl AsRef<Path>,
     ) -> Result<Self, query::ParseError> {
         let mut injection_properties: HashMap<Pattern, InjectionProperties> = HashMap::new();
         let query = Query::new(grammar, query_text, query_path, |pattern, predicate| {

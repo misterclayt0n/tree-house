@@ -50,7 +50,6 @@ fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
     let highlights_query_path = grammar_dir.join("highlights.scm");
     let highlight_query = HighlightQuery::new(
         grammar,
-        &highlights_query_path,
         &overwrites.highlights.clone().unwrap_or_else(|| {
             fs::read_to_string(&highlights_query_path)
                 .map_err(|err| {
@@ -61,6 +60,7 @@ fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
                 })
                 .unwrap()
         }),
+        &highlights_query_path,
     )
     .unwrap();
     let injections_query_path = grammar_dir.join("injections.scm");
@@ -69,11 +69,11 @@ fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
     }
     let injections_query = InjectionsQuery::new(
         grammar,
-        &injections_query_path,
         &overwrites
             .injections
             .clone()
             .unwrap_or_else(|| fs::read_to_string(&injections_query_path).unwrap_or_default()),
+        &injections_query_path,
     )
     .unwrap();
     LanguageConfig {
