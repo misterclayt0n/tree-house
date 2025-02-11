@@ -108,6 +108,12 @@ impl Iterator for HighlightList<'_> {
     }
 }
 
+impl DoubleEndedIterator for HighlightList<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0.next_back().map(|node| node.highlight)
+    }
+}
+
 pub enum HighlightEvent<'a> {
     RefreshHighlights(HighlightList<'a>),
     PushHighlights(HighlightList<'a>),
