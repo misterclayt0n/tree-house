@@ -59,6 +59,10 @@ impl Syntax {
             self.run_injection_query(layer, edits, source, loader, |layer| queue.push(layer))
         }
 
+        if self.layer(self.root).parse_tree.is_none() {
+            return Err(Error::NoRootConfig);
+        }
+
         self.prune_dead_layers();
         Ok(())
     }

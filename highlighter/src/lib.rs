@@ -132,13 +132,29 @@ impl Syntax {
     }
 
     pub fn tree(&self) -> &Tree {
-        self.layer(self.root).tree()
+        self.layer(self.root)
+            .tree()
+            .expect("`Syntax::new` would err if the root layer's tree could not be parsed")
     }
 
     #[inline]
     pub fn tree_for_byte_range(&self, start: u32, end: u32) -> &Tree {
-        let layer = self.layer_for_byte_range(start, end);
-        self.layer(layer).tree()
+        self.layer_and_tree_for_byte_range(start, end).1
+    }
+
+    /// Finds the smallest layer which has a parse tree and covers the given range.
+    pub(crate) fn layer_and_tree_for_byte_range(&self, start: u32, end: u32) -> (Layer, &Tree) {
+        let mut layer = self.layer_for_byte_range(start, end);
+        loop {
+            // NOTE: this loop is guaranteed to terminate because the root layer always has a
+            // tree.
+            if let Some(tree) = self.layer(layer).tree() {
+                return (layer, tree);
+            }
+            if let Some(parent) = self.layer(layer).parent {
+                layer = parent;
+            }
+        }
     }
 
     #[inline]
@@ -222,9 +238,12 @@ impl Hash for LayerData {
 }
 
 impl LayerData {
-    pub fn tree(&self) -> &Tree {
-        // TODO: no unwrap
-        self.parse_tree.as_ref().unwrap()
+    /// Returns the parsed `Tree` for this layer.
+    ///
+    /// This `Option` will always be `Some` when the `LanguageLoader` passed to `Syntax::new`
+    /// returns `Some` when passed the layer's language in `LanguageLoader::get_config`.
+    pub fn tree(&self) -> Option<&Tree> {
+        self.parse_tree.as_ref()
     }
 
     /// Returns the injection range **within this layers** that contains `idx`.
@@ -253,6 +272,7 @@ pub enum Error {
     ExceededMaximumSize,
     InvalidRanges,
     Unknown,
+    NoRootConfig,
 }
 
 impl fmt::Display for Error {
@@ -262,6 +282,9 @@ impl fmt::Display for Error {
             Self::ExceededMaximumSize => f.write_str("input text exceeds the maximum allowed size"),
             Self::InvalidRanges => f.write_str("invalid ranges"),
             Self::Unknown => f.write_str("an unknown error occurred"),
+            Self::NoRootConfig => f.write_str(
+                "`LanguageLoader::get_config` for the root layer language returned `None`",
+            ),
         }
     }
 }

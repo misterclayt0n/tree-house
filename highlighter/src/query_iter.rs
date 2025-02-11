@@ -61,7 +61,6 @@ where
     S: Default,
 {
     fn init_layer(&mut self, injection: Injection) -> Box<ActiveLayer<'a, S>> {
-        let node = self.syntax.layer(injection.layer).tree().root_node();
         self.active_layers
             .remove(&injection.layer)
             .unwrap_or_else(|| {
@@ -72,9 +71,17 @@ where
                 let mut cursor = InactiveQueryCursor::new();
                 cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
                 cursor.set_byte_range(self.range.clone());
-                let cursor = self.loader.get_query(layer.language).map(|query| {
-                    InactiveQueryCursor::new().execute_query(query, &node, RopeInput::new(self.src))
-                });
+                let cursor = self
+                    .loader
+                    .get_query(layer.language)
+                    .and_then(|query| Some((query, layer.tree()?.root_node())))
+                    .map(|(query, node)| {
+                        InactiveQueryCursor::new().execute_query(
+                            query,
+                            &node,
+                            RopeInput::new(self.src),
+                        )
+                    });
                 Box::new(ActiveLayer {
                     state: S::default(),
                     query_iter: LayerQueryIter {

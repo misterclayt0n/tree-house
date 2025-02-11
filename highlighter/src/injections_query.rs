@@ -397,9 +397,9 @@ impl Syntax {
             } else if let Some(reused_injection) = reused_injection {
                 layer_data.flags.reused = true;
                 layer_data.flags.modified = true;
-                let reused_parse_tree = self.layer(reused_injection.layer).tree().clone();
+                let reused_parse_tree = self.layer(reused_injection.layer).tree().cloned();
                 layer_data = self.layer_mut(layer);
-                layer_data.parse_tree = Some(reused_parse_tree)
+                layer_data.parse_tree = reused_parse_tree;
             }
 
             let old_len = injections.len();

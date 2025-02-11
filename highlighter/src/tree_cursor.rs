@@ -27,13 +27,18 @@ impl<'tree> TreeCursor<'tree> {
             return true;
         };
 
-        // Ascend to the parent layer if one exists.
-        let Some(parent) = self.syntax.layer(self.current).parent else {
-            return false;
-        };
+        loop {
+            // Ascend to the parent layer if one exists.
+            let Some(parent) = self.syntax.layer(self.current).parent else {
+                return false;
+            };
 
-        self.current = parent;
-        self.cursor = self.syntax.layer(self.current).tree().walk();
+            self.current = parent;
+            if let Some(tree) = self.syntax.layer(self.current).tree() {
+                self.cursor = tree.walk();
+                break;
+            }
+        }
 
         true
     }
@@ -54,13 +59,16 @@ impl<'tree> TreeCursor<'tree> {
     pub fn goto_first_child(&mut self) -> bool {
         let range = self.cursor.node().byte_range();
         let layer = self.syntax.layer(self.current);
-        if let Some(injection) = layer
+        if let Some((layer, tree)) = layer
             .injection_at_byte_idx(range.start)
             .filter(|injection| injection.range.end >= range.end)
+            .and_then(|injection| {
+                Some((injection.layer, self.syntax.layer(injection.layer).tree()?))
+            })
         {
             // Switch to the child layer.
-            self.current = injection.layer;
-            self.cursor = self.syntax.layer(self.current).tree().walk();
+            self.current = layer;
+            self.cursor = tree.walk();
             return true;
         }
 
@@ -76,9 +84,9 @@ impl<'tree> TreeCursor<'tree> {
     }
 
     pub fn reset_to_byte_range(&mut self, start: u32, end: u32) {
-        let layer = self.syntax.layer_for_byte_range(start, end);
+        let (layer, tree) = self.syntax.layer_and_tree_for_byte_range(start, end);
         self.current = layer;
-        self.cursor = self.syntax.layer(self.current).tree().walk();
+        self.cursor = tree.walk();
 
         loop {
             let node = self.cursor.node();
