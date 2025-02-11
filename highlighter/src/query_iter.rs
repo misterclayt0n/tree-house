@@ -253,7 +253,7 @@ where
                     // consume match
                     let matched_node = self.current_layer.query_iter.consume();
                     // ignore nodes that are overlapped by the injection
-                    if matched_node.byte_range.start < injection.range.start
+                    if matched_node.byte_range.start <= injection.range.start
                         || injection.range.end < matched_node.byte_range.end
                     {
                         return Some(QueryIterEvent::Match(matched_node));

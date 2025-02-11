@@ -1,5 +1,7 @@
    // TODO **hello-world** 
-//    ┗━━┹─ info
+// ┡━┛┡━━┛┗━━━━━━━━━━━━━━━┹─ comment
+// │  ╰─ comment info
+// ╰─ comment
    fn foo() {
 // ┡┛ ┡━┛┡┛ ╰─ punctuation.bracket
 // │  │  ╰─ punctuation.bracket
@@ -13,6 +15,7 @@
    }
 // ╰─ punctuation.bracket
    /// bar**
+// ┗━━━━━━━┹─ comment
    fn bar() {
 // ┡┛ ┡━┛┡┛ ╰─ punctuation.bracket
 // │  │  ╰─ punctuation.bracket
