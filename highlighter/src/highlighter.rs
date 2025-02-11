@@ -85,9 +85,9 @@ pub struct LayerData {
     dormant_highlights: Vec<HighlightedNode>,
 }
 
-pub struct Highlighter<'a, Loader: LanguageLoader> {
-    query: QueryIter<'a, HighlightQueryLoader<&'a Loader>, LayerData>,
-    next_query_event: Option<QueryIterEvent<LayerData>>,
+pub struct Highlighter<'a, 'tree, Loader: LanguageLoader> {
+    query: QueryIter<'a, 'tree, HighlightQueryLoader<&'a Loader>, LayerData>,
+    next_query_event: Option<QueryIterEvent<'tree, LayerData>>,
     active_highlights: Vec<HighlightedNode>,
     next_highlight_end: u32,
     next_highlight_start: u32,
@@ -119,9 +119,9 @@ pub enum HighlightEvent<'a> {
     PushHighlights(HighlightList<'a>),
 }
 
-impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
+impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
     pub fn new(
-        syntax: &'a Syntax,
+        syntax: &'tree Syntax,
         src: RopeSlice<'a>,
         loader: &'a Loader,
         range: impl RangeBounds<u32>,
@@ -193,7 +193,7 @@ impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
         }
     }
 
-    fn advance_query_iter(&mut self) -> Option<QueryIterEvent<LayerData>> {
+    fn advance_query_iter(&mut self) -> Option<QueryIterEvent<'tree, LayerData>> {
         let event = replace(&mut self.next_query_event, self.query.next());
         self.next_highlight_start = self
             .next_query_event
@@ -231,7 +231,8 @@ impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
     }
 
     fn start_highlight(&mut self, node: MatchedNode, first_highlight: &mut bool) {
-        if node.byte_range.is_empty() {
+        let range = node.syntax_node.byte_range();
+        if range.is_empty() {
             return;
         }
 
@@ -241,7 +242,7 @@ impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
             && self
                 .active_highlights
                 .last()
-                .is_some_and(|prev_node| prev_node.end == node.byte_range.end)
+                .is_some_and(|prev_node| prev_node.end == range.end)
         {
             self.active_highlights.pop();
         }
@@ -250,7 +251,7 @@ impl<'a, Loader: LanguageLoader> Highlighter<'a, Loader> {
         });
         if highlight != Highlight::NONE {
             self.active_highlights.push(HighlightedNode {
-                end: node.byte_range.end,
+                end: range.end,
                 highlight,
             });
             *first_highlight = false;

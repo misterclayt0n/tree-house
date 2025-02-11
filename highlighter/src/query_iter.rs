@@ -7,60 +7,64 @@ use hashbrown::HashMap;
 use ropey::RopeSlice;
 
 use crate::{Injection, Language, Layer, Range, Syntax, TREE_SITTER_MATCH_LIMIT};
-use tree_sitter::{Capture, InactiveQueryCursor, Query, QueryCursor, RopeInput};
+use tree_sitter::{Capture, InactiveQueryCursor, Node, Pattern, Query, QueryCursor, RopeInput};
 
 #[derive(Debug, Clone)]
-pub struct MatchedNode {
+pub struct MatchedNode<'tree> {
+    pub pattern: Pattern,
+    pub syntax_node: Node<'tree>,
     pub capture: Capture,
-    pub byte_range: Range,
 }
 
-struct LayerQueryIter<'a> {
-    cursor: Option<QueryCursor<'a, 'a, RopeInput<'a>>>,
-    peeked: Option<MatchedNode>,
+struct LayerQueryIter<'a, 'tree> {
+    cursor: Option<QueryCursor<'a, 'tree, RopeInput<'a>>>,
+    peeked: Option<MatchedNode<'tree>>,
 }
 
-impl LayerQueryIter<'_> {
-    fn peek(&mut self) -> Option<&MatchedNode> {
+impl<'tree> LayerQueryIter<'_, 'tree> {
+    fn peek(&mut self) -> Option<&MatchedNode<'tree>> {
         if self.peeked.is_none() {
             let (query_match, node_idx) = self.cursor.as_mut()?.next_matched_node()?;
+            let pattern = query_match.pattern();
             let matched_node = query_match.matched_node(node_idx);
             self.peeked = Some(MatchedNode {
+                pattern,
+                // NOTE: `Node` is cheap to clone, it's essentially Copy.
+                syntax_node: matched_node.syntax_node.clone(),
                 capture: matched_node.capture,
-                byte_range: matched_node.syntax_node.byte_range(),
             });
         }
         self.peeked.as_ref()
     }
 
-    fn consume(&mut self) -> MatchedNode {
+    fn consume(&mut self) -> MatchedNode<'tree> {
         self.peeked.take().unwrap()
     }
 }
 
-struct ActiveLayer<'a, S> {
+struct ActiveLayer<'a, 'tree, S> {
     state: S,
-    query_iter: LayerQueryIter<'a>,
+    query_iter: LayerQueryIter<'a, 'tree>,
     injections: Peekable<slice::Iter<'a, Injection>>,
 }
 
 // data only needed when entering and exiting injections
 // separate struck to keep the QueryIter reasonably small
-struct QueryIterLayerManager<'a, Loader, S> {
+struct QueryIterLayerManager<'a, 'tree, Loader, S> {
     range: Range,
     loader: Loader,
     src: RopeSlice<'a>,
-    syntax: &'a Syntax,
-    active_layers: HashMap<Layer, Box<ActiveLayer<'a, S>>>,
+    syntax: &'tree Syntax,
+    active_layers: HashMap<Layer, Box<ActiveLayer<'a, 'tree, S>>>,
     active_injections: Vec<Injection>,
 }
 
-impl<'a, Loader, S> QueryIterLayerManager<'a, Loader, S>
+impl<'a, 'tree: 'a, Loader, S> QueryIterLayerManager<'a, 'tree, Loader, S>
 where
     Loader: QueryLoader<'a>,
     S: Default,
 {
-    fn init_layer(&mut self, injection: Injection) -> Box<ActiveLayer<'a, S>> {
+    fn init_layer(&mut self, injection: Injection) -> Box<ActiveLayer<'a, 'tree, S>> {
         self.active_layers
             .remove(&injection.layer)
             .unwrap_or_else(|| {
@@ -94,19 +98,19 @@ where
     }
 }
 
-pub struct QueryIter<'a, Loader: QueryLoader<'a>, LayerState: Default = ()> {
-    layer_manager: Box<QueryIterLayerManager<'a, Loader, LayerState>>,
-    current_layer: Box<ActiveLayer<'a, LayerState>>,
+pub struct QueryIter<'a, 'tree, Loader: QueryLoader<'a>, LayerState: Default = ()> {
+    layer_manager: Box<QueryIterLayerManager<'a, 'tree, Loader, LayerState>>,
+    current_layer: Box<ActiveLayer<'a, 'tree, LayerState>>,
     current_injection: Injection,
 }
 
-impl<'a, Loader, LayerState> QueryIter<'a, Loader, LayerState>
+impl<'a, 'tree: 'a, Loader, LayerState> QueryIter<'a, 'tree, Loader, LayerState>
 where
     Loader: QueryLoader<'a>,
     LayerState: Default,
 {
     pub fn new(
-        syntax: &'a Syntax,
+        syntax: &'tree Syntax,
         src: RopeSlice<'a>,
         loader: Loader,
         range: impl RangeBounds<u32>,
@@ -144,7 +148,7 @@ where
         }
     }
 
-    pub fn syntax(&self) -> &'a Syntax {
+    pub fn syntax(&self) -> &'tree Syntax {
         self.layer_manager.syntax
     }
 
@@ -214,23 +218,28 @@ where
     }
 }
 
-impl<'a, Loader, S> Iterator for QueryIter<'a, Loader, S>
+impl<'cursor, 'tree: 'cursor, Loader, S> Iterator for QueryIter<'cursor, 'tree, Loader, S>
 where
-    Loader: QueryLoader<'a>,
+    Loader: QueryLoader<'cursor>,
     S: Default,
 {
-    type Item = QueryIterEvent<S>;
+    type Item = QueryIterEvent<'tree, S>;
 
-    fn next(&mut self) -> Option<QueryIterEvent<S>> {
+    fn next(&mut self) -> Option<Self::Item> {
         loop {
             let next_injection = self
                 .current_layer
                 .injections
                 .peek()
                 .filter(|injection| injection.range.start <= self.current_injection.range.end);
-            let next_match = self.current_layer.query_iter.peek().filter(|matched_node| {
-                matched_node.byte_range.start <= self.current_injection.range.end
-            });
+            let next_match = self
+                .current_layer
+                .query_iter
+                .peek()
+                .filter(|matched_node| {
+                    matched_node.syntax_node.start_byte() <= self.current_injection.range.end
+                })
+                .cloned();
 
             match (next_match, next_injection) {
                 (None, None) => {
@@ -238,7 +247,7 @@ where
                         QueryIterEvent::ExitInjection { injection, state }
                     });
                 }
-                (Some(mat), _) if mat.byte_range.is_empty() => {
+                (Some(mat), _) if mat.syntax_node.start_byte() == mat.syntax_node.end_byte() => {
                     self.current_layer.query_iter.consume();
                     continue;
                 }
@@ -248,13 +257,13 @@ where
                     return Some(QueryIterEvent::Match(matched_node));
                 }
                 (Some(matched_node), Some(injection))
-                    if matched_node.byte_range.start < injection.range.end =>
+                    if matched_node.syntax_node.start_byte() < injection.range.end =>
                 {
                     // consume match
                     let matched_node = self.current_layer.query_iter.consume();
                     // ignore nodes that are overlapped by the injection
-                    if matched_node.byte_range.start <= injection.range.start
-                        || injection.range.end < matched_node.byte_range.end
+                    if matched_node.syntax_node.start_byte() <= injection.range.start
+                        || injection.range.end < matched_node.syntax_node.end_byte()
                     {
                         return Some(QueryIterEvent::Match(matched_node));
                     }
@@ -271,20 +280,20 @@ where
 }
 
 #[derive(Debug)]
-pub enum QueryIterEvent<State = ()> {
+pub enum QueryIterEvent<'tree, State = ()> {
     EnterInjection(Injection),
-    Match(MatchedNode),
+    Match(MatchedNode<'tree>),
     ExitInjection {
         injection: Injection,
         state: Option<State>,
     },
 }
 
-impl<S> QueryIterEvent<S> {
+impl<S> QueryIterEvent<'_, S> {
     pub fn start_byte(&self) -> u32 {
         match self {
             QueryIterEvent::EnterInjection(injection) => injection.range.start,
-            QueryIterEvent::Match(mat) => mat.byte_range.start,
+            QueryIterEvent::Match(mat) => mat.syntax_node.start_byte(),
             QueryIterEvent::ExitInjection { injection, .. } => injection.range.end,
         }
     }
