@@ -1,7 +1,10 @@
 [package]
 name = "helix-syntax"
 description = "A production ready tree-sitter syntax highlighter, component of the helix-editor"
-authors = ["Pascal Kuthe <pascalkuthe@pm.me>"]
+authors = [
+  "Pascal Kuthe <pascalkuthe@pm.me>",
+  "Michael Davis <mcarsondavis@gmail.com>"
+]
 version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
