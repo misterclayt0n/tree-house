@@ -232,7 +232,7 @@ impl LayerData {
     pub fn injection_at_byte_idx(&self, idx: u32) -> Option<&Injection> {
         self.injections_at_byte_idx(idx)
             .next()
-            .filter(|injection| injection.range.end > idx)
+            .filter(|injection| injection.range.start <= idx)
     }
 
     /// Returns the injection ranges **within this layers** that contain
@@ -241,7 +241,7 @@ impl LayerData {
     pub fn injections_at_byte_idx(&self, idx: u32) -> impl Iterator<Item = &Injection> {
         let i = self
             .injections
-            .partition_point(|range| range.range.start < idx);
+            .partition_point(|range| range.range.end < idx);
         self.injections[i..].iter()
     }
 }
