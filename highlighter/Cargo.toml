@@ -1,6 +1,6 @@
 [package]
-name = "helix-syntax"
-description = "A production ready tree-sitter syntax highlighter, component of the helix-editor"
+name = "tree-house"
+description = "A robust and cozy highlighter library for tree-sitter"
 authors = [
   "Pascal Kuthe <pascalkuthe@pm.me>",
   "Michael Davis <mcarsondavis@gmail.com>"
@@ -8,7 +8,7 @@ authors = [
 version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
-repository = "https://github.com/helix-editor/tree-sitter-helix"
+repository = "https://github.com/helix-editor/tree-house"
 readme = "../README.md"
 rust-version = "1.76.0"
 
@@ -34,7 +34,7 @@ skidder = { path = "../skidder" }
 
 [dependencies.tree-sitter]
 version = "0.1.0"
-package = "twig-sitter"
+package = "tree-house-bindings"
 path = "../bindings"
 features = ["ropey"]
 

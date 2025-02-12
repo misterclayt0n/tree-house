@@ -193,26 +193,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "helix-syntax"
-version = "0.1.0"
-dependencies = [
- "arc-swap",
- "cov-mark",
- "hashbrown",
- "indexmap",
- "kstring",
- "once_cell",
- "pretty_assertions",
- "regex",
- "regex-cursor 0.1.4",
- "ropey",
- "skidder",
- "slab",
- "twig-sitter",
- "unicode-width 0.1.12",
-]
-
-[[package]]
 name = "indexmap"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -593,7 +573,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "twig-sitter"
+name = "tree-house"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "cov-mark",
+ "hashbrown",
+ "indexmap",
+ "kstring",
+ "once_cell",
+ "pretty_assertions",
+ "regex",
+ "regex-cursor 0.1.4",
+ "ropey",
+ "skidder",
+ "slab",
+ "tree-house-bindings",
+ "unicode-width 0.1.12",
+]
+
+[[package]]
+name = "tree-house-bindings"
 version = "0.1.0"
 dependencies = [
  "cc",
