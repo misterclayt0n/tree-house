@@ -11,6 +11,7 @@ use tree_sitter::{Capture, InactiveQueryCursor, Node, Pattern, Query, QueryCurso
 
 #[derive(Debug, Clone)]
 pub struct MatchedNode<'tree> {
+    pub match_id: u32,
     pub pattern: Pattern,
     pub syntax_node: Node<'tree>,
     pub capture: Capture,
@@ -25,9 +26,11 @@ impl<'tree> LayerQueryIter<'_, 'tree> {
     fn peek(&mut self) -> Option<&MatchedNode<'tree>> {
         if self.peeked.is_none() {
             let (query_match, node_idx) = self.cursor.as_mut()?.next_matched_node()?;
+            let match_id = query_match.id();
             let pattern = query_match.pattern();
             let matched_node = query_match.matched_node(node_idx);
             self.peeked = Some(MatchedNode {
+                match_id,
                 pattern,
                 // NOTE: `Node` is cheap to clone, it's essentially Copy.
                 syntax_node: matched_node.syntax_node.clone(),
