@@ -206,7 +206,7 @@ impl Drop for InactiveQueryCursor {
 pub type MatchedNodeIdx = u32;
 
 #[repr(C)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct MatchedNode<'tree> {
     pub syntax_node: Node<'tree>,
     pub capture: Capture,
@@ -218,6 +218,16 @@ pub struct QueryMatch<'cursor, 'tree> {
     matched_nodes: &'cursor [MatchedNode<'tree>],
     query_cursor: &'cursor mut QueryCursorData,
     _tree: PhantomData<&'tree super::Tree>,
+}
+
+impl std::fmt::Debug for QueryMatch<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("QueryMatch")
+            .field("id", &self.id)
+            .field("pattern", &self.pattern)
+            .field("matched_nodes", &self.matched_nodes)
+            .finish_non_exhaustive()
+    }
 }
 
 impl<'tree> QueryMatch<'_, 'tree> {
