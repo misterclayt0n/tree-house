@@ -87,7 +87,7 @@ pub fn read_query(language: &str, mut read_query_text: impl FnMut(&str) -> Strin
 }
 
 pub trait LanguageLoader {
-    fn language_for_marker(&self, marker: &InjectionLanguageMarker) -> Option<Language>;
+    fn language_for_marker(&self, marker: InjectionLanguageMarker) -> Option<Language>;
     fn get_config(&self, lang: Language) -> Option<&LanguageConfig>;
 }
 
@@ -95,7 +95,7 @@ impl<T> LanguageLoader for &'_ T
 where
     T: LanguageLoader,
 {
-    fn language_for_marker(&self, marker: &InjectionLanguageMarker) -> Option<Language> {
+    fn language_for_marker(&self, marker: InjectionLanguageMarker) -> Option<Language> {
         T::language_for_marker(self, marker)
     }
 

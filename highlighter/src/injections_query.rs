@@ -36,7 +36,7 @@ pub struct InjectionProperties {
 /// For example if a query sets a property `(#set! injection.language "rust")` then the loader
 /// should load the Rust language. Alternatively the loader might be asked to load a language
 /// based on some text in the document, for example a markdown code fence language name.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum InjectionLanguageMarker<'a> {
     /// The language is specified by name in the injection query itself.
     ///
@@ -267,7 +267,7 @@ impl InjectionsQuery {
             .as_deref()
             .map(InjectionLanguageMarker::Name))?;
 
-        let language = loader.language_for_marker(&marker)?;
+        let language = loader.language_for_marker(marker)?;
         let scope = if properties.combined {
             Some(InjectionScope::Pattern {
                 pattern: query_match.pattern(),

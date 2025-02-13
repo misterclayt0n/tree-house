@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -160,11 +161,15 @@ impl TestLanguageLoader {
 }
 
 impl LanguageLoader for TestLanguageLoader {
-    fn language_for_marker(&self, marker: &InjectionLanguageMarker) -> Option<Language> {
-        let InjectionLanguageMarker::Name(name) = marker else {
-            return None;
-        };
-        self.languages.get(*name).copied()
+    fn language_for_marker(&self, marker: InjectionLanguageMarker) -> Option<Language> {
+        match marker {
+            InjectionLanguageMarker::Name(name) => self.languages.get(name).copied(),
+            InjectionLanguageMarker::Match(text) => {
+                let name: Cow<str> = text.into();
+                self.languages.get(name.as_ref()).copied()
+            }
+            _ => unimplemented!(),
+        }
     }
 
     fn get_config(&self, lang: Language) -> Option<&LanguageConfig> {
