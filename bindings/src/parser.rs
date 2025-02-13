@@ -28,7 +28,7 @@ impl Drop for RawParser {
     }
 }
 
-/// A stateful object that this is used to produce a [`SyntaxTree`] based on some
+/// A stateful object that this is used to produce a [`Tree`] based on some
 /// source code.
 pub struct Parser {
     ptr: NonNull<ParserData>,
@@ -232,8 +232,8 @@ extern "C" {
     /// whether or not the language was successfully assigned. True means assignment
     /// succeeded. False means there was a version mismatch: the language was generated with
     /// an incompatible version of the Tree-sitter CLI. Check the language's version using
-    /// [`ts_language_version`] and compare it to this library's [`TREE_SITTER_LANGUAGE_VERSION`]
-    /// and [`TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION`] constants.
+    /// `ts_language_version` and compare it to this library's `TREE_SITTER_LANGUAGE_VERSION`
+    /// and `TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION` constants.
     fn ts_parser_set_language(parser: NonNull<ParserData>, language: Grammar) -> bool;
     /// Set the ranges of text that the parser should include when parsing. By default, the parser
     /// will always include entire documents. This function allows you to parse only a *portion*

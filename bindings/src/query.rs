@@ -416,7 +416,7 @@ extern "C" {
     /// Create a new query from a string containing one or more S-expression
     /// patterns. The query is associated with a particular language, and can
     /// only be run on syntax nodes parsed with that language. If all of the
-    /// given patterns are valid, this returns a [`TSQuery`]. If a pattern is
+    /// given patterns are valid, this returns a `TSQuery`. If a pattern is
     /// invalid, this returns `NULL`, and provides two pieces of information
     /// about the problem: 1. The byte offset of the error is written to
     /// the `error_offset` parameter. 2. The type of error is written to the

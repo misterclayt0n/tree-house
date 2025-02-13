@@ -110,11 +110,14 @@ impl Clone for TreeCursor<'_> {
 }
 
 extern "C" {
-
     /// Create a new tree cursor starting from the given node.
+    ///
     /// A tree cursor allows you to walk a syntax tree more efficiently than is
-    /// possible using the [`TSNode`] functions. It is a mutable object that is always
+    /// possible using the `TSNode` functions. It is a mutable object that is always
     /// on a certain syntax node, and can be moved imperatively to different nodes.
+    ///
+    /// Note that the given node is considered the root of the cursor,
+    /// and the cursor cannot walk outside this node.
     fn ts_tree_cursor_new(node: NodeRaw) -> TreeCursorRaw;
     /// Delete a tree cursor, freeing all of the memory that it used.
     fn ts_tree_cursor_delete(self_: *mut TreeCursorRaw);

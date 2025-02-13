@@ -72,7 +72,7 @@ impl<'tree> Node<'tree> {
         unsafe { ts_node_symbol(self.as_raw()) }
     }
 
-    /// Get the [`Language`] that was used to parse this node's syntax tree.
+    /// Get the [`Grammar`] that was used to parse this node's syntax tree.
     #[inline]
     pub fn grammar(&self) -> Grammar {
         unsafe { ts_node_language(self.as_raw()) }
@@ -136,7 +136,7 @@ impl<'tree> Node<'tree> {
     /// See also [`Node::is_named`].
     /// This method is fairly fast, but its cost is technically log(i), so if
     /// you might be iterating over a long list of children, you should use
-    /// [`Node::named_children`] instead.
+    /// `Node::named_children` instead.
     #[inline]
     pub fn named_child(&self, i: u32) -> Option<Node<'tree>> {
         unsafe { Node::from_raw(ts_node_named_child(self.as_raw(), i)) }

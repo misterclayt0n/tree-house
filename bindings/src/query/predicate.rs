@@ -409,10 +409,10 @@ extern "C" {
     /// for the `type` field:
     ///
     /// - `TSQueryPredicateStepTypeCapture` - Steps with this type represent names of captures.
-    ///   Their `value_id` can be used with the [`ts_query_capture_name_for_id`] function to
+    ///   Their `value_id` can be used with the `ts_query_capture_name_for_id` function to
     ///   obtain the name of the capture.
     /// - `TSQueryPredicateStepTypeString` - Steps with this type represent literal strings.
-    ///   Their `value_id` can be used with the [`ts_query_string_value_for_id`] function to
+    ///   Their `value_id` can be used with the `ts_query_string_value_for_id` function to
     ///   obtain their string value.
     /// - `TSQueryPredicateStepTypeDone` - Steps with this type are *sentinels* that represent the
     ///   end of an individual predicate. If a pattern has two predicates, then there will be two
