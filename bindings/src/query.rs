@@ -281,6 +281,18 @@ impl Query {
     pub fn patterns(&self) -> impl ExactSizeIterator<Item = Pattern> {
         (0..self.pattern_count() as u32).map(Pattern)
     }
+
+    /// Disable a certain capture within a query.
+    ///
+    /// This prevents the capture from being returned in matches, and also avoids
+    /// any resource usage associated with recording the capture. Currently, there
+    /// is no way to undo this.
+    pub fn disable_capture(&mut self, name: &str) {
+        let bytes = name.as_bytes();
+        unsafe {
+            ts_query_disable_capture(self.raw, bytes.as_ptr(), bytes.len() as u32);
+        }
+    }
 }
 
 impl Drop for Query {
@@ -459,4 +471,11 @@ extern "C" {
         index: u32,
         length: &mut u32,
     ) -> *const u8;
+
+    /// Disable a certain capture within a query.
+    ///
+    /// This prevents the capture from being returned in matches, and also avoids
+    /// any resource usage associated with recording the capture. Currently, there
+    /// is no way to undo this.
+    fn ts_query_disable_capture(self_: NonNull<QueryData>, name: *const u8, length: u32);
 }
