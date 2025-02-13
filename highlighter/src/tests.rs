@@ -182,16 +182,21 @@ impl LanguageLoader for TestLanguageLoader {
     }
 }
 
-fn highlight_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
-    let path = Path::new("../fixtures").join(fixture);
-    let lang = match path
+fn lang_for_path(path: &Path, loader: &TestLanguageLoader) -> Language {
+    match path
         .extension()
         .and_then(|it| it.to_str())
         .unwrap_or_default()
     {
         "rs" => loader.get("rust"),
+        "html" => loader.get("html"),
         extension => unreachable!("unknown file type .{extension}"),
-    };
+    }
+}
+
+fn highlight_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
+    let path = Path::new("../fixtures").join(fixture);
+    let lang = lang_for_path(&path, loader);
     check_highlighter_fixture(
         path,
         "// ",
@@ -204,14 +209,7 @@ fn highlight_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
 
 fn injection_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
     let path = Path::new("../fixtures").join(fixture);
-    let lang = match path
-        .extension()
-        .and_then(|it| it.to_str())
-        .unwrap_or_default()
-    {
-        "rs" => loader.get("rust"),
-        extension => unreachable!("unknown file type .{extension}"),
-    };
+    let lang = lang_for_path(&path, loader);
     check_injection_fixture(
         path,
         "// ",
@@ -226,6 +224,14 @@ fn injection_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
 fn highlight() {
     let loader = TestLanguageLoader::new();
     highlight_fixture(&loader, "highlighter/hello_world.rs");
+}
+
+#[test]
+fn highlight_overlaps_with_injection() {
+    let loader = TestLanguageLoader::new();
+    // The comment node is highlighted both by the comment capture and as an injection for the
+    // comment grammar.
+    highlight_fixture(&loader, "highlighter/comment.html");
 }
 
 #[test]
