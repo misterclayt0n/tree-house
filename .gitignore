@@ -1,4 +1,5 @@
 target
 result
 .direnv
-test-grammars/
+/test-grammars/*/*.so
+/test-grammars/*/.BUILD_COOKIE

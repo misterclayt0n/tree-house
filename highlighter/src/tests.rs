@@ -15,7 +15,6 @@ use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
 use crate::Language;
 
 static GRAMMARS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
-    fs::create_dir_all("../test-grammars").unwrap();
     let skidder_config = skidder_config();
     skidder::fetch(&skidder_config, false).unwrap();
     skidder::build_all_grammars(&skidder_config, false, None).unwrap();
@@ -26,12 +25,11 @@ static GRAMMARS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
 
 fn skidder_config() -> skidder::Config {
     skidder::Config {
-        repos: vec![Repo::Git {
-            name: "helix-language-support".to_owned(),
-            remote: "git@github.com:helix-editor/tree-sitter-grammars.git".into(),
-            branch: "reversed".into(),
+        repos: vec![Repo::Local {
+            // `./test-grammars` in the root of the repo.
+            path: Path::new("../test-grammars").canonicalize().unwrap(),
         }],
-        index: Path::new("../test-grammars").canonicalize().unwrap(),
+        index: PathBuf::new(),
         verbose: true,
     }
 }

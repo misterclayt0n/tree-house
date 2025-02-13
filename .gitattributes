@@ -1,0 +1,3 @@
+test-grammars/*/*.scm linguist-vendored
+test-grammars/*/src/** linguist-vendored
+test-grammars/*/src/{parser.c,grammar.json,scanner.*} binary
