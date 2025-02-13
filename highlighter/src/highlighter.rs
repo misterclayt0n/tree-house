@@ -231,7 +231,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
     }
 
     fn start_highlight(&mut self, node: MatchedNode, first_highlight: &mut bool) {
-        let range = node.syntax_node.byte_range();
+        let range = node.node.byte_range();
         if range.is_empty() {
             return;
         }

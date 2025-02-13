@@ -5,7 +5,7 @@ use std::mem;
 use std::ops::Range;
 use std::ptr::{self, NonNull};
 
-use crate::node::SyntaxTreeNodeRaw;
+use crate::node::NodeRaw;
 use crate::query::{Capture, Pattern, Query, QueryData};
 use crate::{Input, IntoInput, Node, Tree};
 
@@ -208,7 +208,7 @@ pub type MatchedNodeIdx = u32;
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct MatchedNode<'tree> {
-    pub syntax_node: Node<'tree>,
+    pub node: Node<'tree>,
     pub capture: Capture,
 }
 
@@ -239,7 +239,7 @@ impl<'tree> QueryMatch<'_, 'tree> {
         self.matched_nodes
             .iter()
             .filter(move |mat| mat.capture == capture)
-            .map(|mat| &mat.syntax_node)
+            .map(|mat| &mat.node)
     }
 
     pub fn matched_node(&self, i: MatchedNodeIdx) -> &MatchedNode<'tree> {
@@ -270,7 +270,7 @@ impl<'tree> QueryMatch<'_, 'tree> {
 #[repr(C)]
 #[derive(Debug)]
 struct TSQueryCapture {
-    node: SyntaxTreeNodeRaw,
+    node: NodeRaw,
     index: u32,
 }
 
@@ -324,11 +324,7 @@ extern "C" {
     fn ts_query_cursor_new() -> *mut QueryCursorData;
 
     /// Start running a given query on a given node.
-    fn ts_query_cursor_exec(
-        self_: *mut QueryCursorData,
-        query: &QueryData,
-        node: SyntaxTreeNodeRaw,
-    );
+    fn ts_query_cursor_exec(self_: *mut QueryCursorData, query: &QueryData, node: NodeRaw);
     /// Manage the maximum number of in-progress matches allowed by this query
     /// cursor.
     ///

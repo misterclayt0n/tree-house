@@ -1,7 +1,7 @@
 use std::fmt;
 use std::ptr::NonNull;
 
-use crate::node::{Node, SyntaxTreeNodeRaw};
+use crate::node::{Node, NodeRaw};
 use crate::{Point, TreeCursor};
 
 // opaque pointers
@@ -88,7 +88,7 @@ extern "C" {
     /// Delete the syntax tree, freeing all of the memory that it used.
     fn ts_tree_delete(self_: NonNull<SyntaxTreeData>);
     /// Get the root node of the syntax tree.
-    fn ts_tree_root_node<'tree>(self_: NonNull<SyntaxTreeData>) -> SyntaxTreeNodeRaw;
+    fn ts_tree_root_node<'tree>(self_: NonNull<SyntaxTreeData>) -> NodeRaw;
     /// Edit the syntax tree to keep it in sync with source code that has been
     /// edited.
     ///

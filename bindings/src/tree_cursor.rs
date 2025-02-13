@@ -4,7 +4,7 @@ use std::ffi::{c_char, CStr};
 use std::marker::PhantomData;
 use std::{fmt, mem};
 
-use crate::node::SyntaxTreeNodeRaw;
+use crate::node::NodeRaw;
 use crate::{Node, Tree};
 
 thread_local! {
@@ -115,17 +115,17 @@ extern "C" {
     /// A tree cursor allows you to walk a syntax tree more efficiently than is
     /// possible using the [`TSNode`] functions. It is a mutable object that is always
     /// on a certain syntax node, and can be moved imperatively to different nodes.
-    fn ts_tree_cursor_new(node: SyntaxTreeNodeRaw) -> TreeCursorRaw;
+    fn ts_tree_cursor_new(node: NodeRaw) -> TreeCursorRaw;
     /// Delete a tree cursor, freeing all of the memory that it used.
     fn ts_tree_cursor_delete(self_: *mut TreeCursorRaw);
     /// Re-initialize a tree cursor to start at a different node.
-    fn ts_tree_cursor_reset(self_: *mut TreeCursorRaw, node: SyntaxTreeNodeRaw);
+    fn ts_tree_cursor_reset(self_: *mut TreeCursorRaw, node: NodeRaw);
     // /// Re-initialize a tree cursor to the same position as another cursor.
     // /// Unlike [`ts_tree_cursor_reset`], this will not lose parent information and
     // /// allows reusing already created cursors.
     // fn ts_tree_cursor_reset_to(dst: *mut TreeCursorRaw, src: *const TreeCursorRaw);
     /// Get the tree cursor's current node.
-    fn ts_tree_cursor_current_node(self_: *const TreeCursorRaw) -> SyntaxTreeNodeRaw;
+    fn ts_tree_cursor_current_node(self_: *const TreeCursorRaw) -> NodeRaw;
     // /// Get the field name of the tree cursor's current node.
     // /// This returns `NULL` if the current node doesn't have a field.
     // /// See also [`ts_node_child_by_field_name`].

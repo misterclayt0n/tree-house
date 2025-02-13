@@ -92,7 +92,7 @@ impl TextPredicate {
             .filter(|matched_node| matched_node.capture == self.capture);
         match self.kind {
             TextPredicateKind::EqString(str) => self.satisfied_helper(capture_nodes.map(|node| {
-                let range = node.syntax_node.byte_range();
+                let range = node.node.byte_range();
                 input_matches_str(query.get_string(str), range.clone(), input)
             })),
             TextPredicateKind::EqCapture(other_capture) => {
@@ -102,8 +102,8 @@ impl TextPredicate {
 
                 let res = self.satisfied_helper(zip(&mut capture_nodes, &mut other_nodes).map(
                     |(node1, node2)| {
-                        let range1 = node1.syntax_node.byte_range();
-                        let range2 = node2.syntax_node.byte_range();
+                        let range1 = node1.node.byte_range();
+                        let range2 = node2.node.byte_range();
                         input.eq(range1, range2)
                     },
                 ));
@@ -112,7 +112,7 @@ impl TextPredicate {
             }
             TextPredicateKind::MatchString(ref regex) => {
                 self.satisfied_helper(capture_nodes.map(|node| {
-                    let range = node.syntax_node.byte_range();
+                    let range = node.node.byte_range();
                     let mut input = regex_cursor::Input::new(input.cursor_at(range.start));
                     input.slice(range.start as usize..range.end as usize);
                     regex.is_match(input)
@@ -121,7 +121,7 @@ impl TextPredicate {
             TextPredicateKind::AnyString(ref strings) => {
                 let strings = strings.iter().map(|&str| query.get_string(str));
                 self.satisfied_helper(capture_nodes.map(|node| {
-                    let range = node.syntax_node.byte_range();
+                    let range = node.node.byte_range();
                     strings
                         .clone()
                         .filter(|str| str.len() == range.len())

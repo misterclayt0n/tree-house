@@ -5,7 +5,7 @@ use std::iter;
 use ropey::RopeSlice;
 
 use crate::TREE_SITTER_MATCH_LIMIT;
-use tree_sitter::{InactiveQueryCursor, Query, RopeInput, Node};
+use tree_sitter::{InactiveQueryCursor, Node, Query, RopeInput};
 
 #[derive(Debug)]
 pub enum CapturedNode<'a> {

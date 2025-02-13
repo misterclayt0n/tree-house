@@ -9,15 +9,15 @@ use crate::Grammar;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub(super) struct SyntaxTreeNodeRaw {
+pub(super) struct NodeRaw {
     context: [u32; 4],
     id: *const c_void,
     tree: *const c_void,
 }
 
-impl From<Node<'_>> for SyntaxTreeNodeRaw {
-    fn from(node: Node) -> SyntaxTreeNodeRaw {
-        SyntaxTreeNodeRaw {
+impl From<Node<'_>> for NodeRaw {
+    fn from(node: Node) -> NodeRaw {
+        NodeRaw {
             context: node.context,
             id: node.id.as_ptr(),
             tree: node.tree.as_ptr(),
@@ -36,7 +36,7 @@ pub struct Node<'tree> {
 
 impl<'tree> Node<'tree> {
     #[inline]
-    pub(super) unsafe fn from_raw(raw: SyntaxTreeNodeRaw) -> Option<Self> {
+    pub(super) unsafe fn from_raw(raw: NodeRaw) -> Option<Self> {
         Some(Node {
             context: raw.context,
             id: NonNull::new(raw.id as *mut _)?,
@@ -46,8 +46,8 @@ impl<'tree> Node<'tree> {
     }
 
     #[inline]
-    pub(crate) fn as_raw(&self) -> SyntaxTreeNodeRaw {
-        SyntaxTreeNodeRaw {
+    pub(crate) fn as_raw(&self) -> NodeRaw {
+        NodeRaw {
             context: self.context,
             id: self.id.as_ptr(),
             tree: self.tree.as_ptr(),
@@ -119,7 +119,7 @@ impl<'tree> Node<'tree> {
     ///
     /// This method is fairly fast, but its cost is technically log(i), so if
     /// you might be iterating over a long list of children, you should use
-    /// [`SyntaxTreeNode::children`] instead.
+    /// [`Node::children`] instead.
     #[inline]
     pub fn child(&self, i: u32) -> Option<Node<'tree>> {
         unsafe { Node::from_raw(ts_node_child(self.as_raw(), i)) }
@@ -133,10 +133,10 @@ impl<'tree> Node<'tree> {
 
     /// Get this node's *named* child at the given index.
     ///
-    /// See also [`SyntaxTreeNode::is_named`].
+    /// See also [`Node::is_named`].
     /// This method is fairly fast, but its cost is technically log(i), so if
     /// you might be iterating over a long list of children, you should use
-    /// [`SyntaxTreeNode::named_children`] instead.
+    /// [`Node::named_children`] instead.
     #[inline]
     pub fn named_child(&self, i: u32) -> Option<Node<'tree>> {
         unsafe { Node::from_raw(ts_node_named_child(self.as_raw(), i)) }
@@ -144,17 +144,14 @@ impl<'tree> Node<'tree> {
 
     /// Get this node's number of *named* children.
     ///
-    /// See also [`SyntaxTreeNode::is_named`].
+    /// See also [`Node::is_named`].
     #[inline]
     pub fn named_child_count(&self) -> u32 {
         unsafe { ts_node_named_child_count(self.as_raw()) }
     }
 
     #[inline]
-    unsafe fn map(
-        &self,
-        f: unsafe extern "C" fn(SyntaxTreeNodeRaw) -> SyntaxTreeNodeRaw,
-    ) -> Option<Node<'tree>> {
+    unsafe fn map(&self, f: unsafe extern "C" fn(NodeRaw) -> NodeRaw) -> Option<Node<'tree>> {
         Node::from_raw(f(self.as_raw()))
     }
 
@@ -208,7 +205,7 @@ impl<'tree> Node<'tree> {
     /// Iterate over this node's children.
     ///
     /// A [`TreeCursor`] is used to retrieve the children efficiently. Obtain
-    /// a [`TreeCursor`] by calling [`Tree::walk`] or [`SyntaxTreeNode::walk`]. To avoid
+    /// a [`TreeCursor`] by calling [`Tree::walk`] or [`Node::walk`]. To avoid
     /// unnecessary allocations, you should reuse the same cursor for
     /// subsequent calls to this method.
     ///
@@ -242,70 +239,61 @@ unsafe impl Sync for Node<'_> {}
 
 extern "C" {
     /// Get the node's type as a null-terminated string.
-    fn ts_node_type(node: SyntaxTreeNodeRaw) -> *const c_char;
+    fn ts_node_type(node: NodeRaw) -> *const c_char;
 
     /// Get the node's type as a numerical id.
-    fn ts_node_symbol(node: SyntaxTreeNodeRaw) -> u16;
+    fn ts_node_symbol(node: NodeRaw) -> u16;
 
     /// Get the node's language.
-    fn ts_node_language(node: SyntaxTreeNodeRaw) -> Grammar;
+    fn ts_node_language(node: NodeRaw) -> Grammar;
 
     /// Check if the node is *named*. Named nodes correspond to named rules in
     /// the grammar, whereas *anonymous* nodes correspond to string literals in
     /// the grammar
-    fn ts_node_is_named(node: SyntaxTreeNodeRaw) -> bool;
+    fn ts_node_is_named(node: NodeRaw) -> bool;
 
     /// Check if the node is *missing*. Missing nodes are inserted by the parser
     /// in order to recover from certain kinds of syntax errors
-    fn ts_node_is_missing(node: SyntaxTreeNodeRaw) -> bool;
+    fn ts_node_is_missing(node: NodeRaw) -> bool;
 
     /// Get the node's immediate parent
-    fn ts_node_parent(node: SyntaxTreeNodeRaw) -> SyntaxTreeNodeRaw;
+    fn ts_node_parent(node: NodeRaw) -> NodeRaw;
 
     /// Get the node's child at the given index, where zero represents the first
     /// child
-    fn ts_node_child(node: SyntaxTreeNodeRaw, child_index: u32) -> SyntaxTreeNodeRaw;
+    fn ts_node_child(node: NodeRaw, child_index: u32) -> NodeRaw;
 
     /// Get the node's number of children
-    fn ts_node_child_count(node: SyntaxTreeNodeRaw) -> u32;
+    fn ts_node_child_count(node: NodeRaw) -> u32;
 
     /// Get the node's *named* child at the given index. See also
     /// [`ts_node_is_named`]
-    fn ts_node_named_child(node: SyntaxTreeNodeRaw, child_index: u32) -> SyntaxTreeNodeRaw;
+    fn ts_node_named_child(node: NodeRaw, child_index: u32) -> NodeRaw;
 
     /// Get the node's number of *named* children. See also [`ts_node_is_named`]
-    fn ts_node_named_child_count(node: SyntaxTreeNodeRaw) -> u32;
+    fn ts_node_named_child_count(node: NodeRaw) -> u32;
 
     /// Get the node's next sibling
-    fn ts_node_next_sibling(node: SyntaxTreeNodeRaw) -> SyntaxTreeNodeRaw;
+    fn ts_node_next_sibling(node: NodeRaw) -> NodeRaw;
 
-    fn ts_node_prev_sibling(node: SyntaxTreeNodeRaw) -> SyntaxTreeNodeRaw;
+    fn ts_node_prev_sibling(node: NodeRaw) -> NodeRaw;
 
     /// Get the node's next *named* sibling
-    fn ts_node_next_named_sibling(node: SyntaxTreeNodeRaw) -> SyntaxTreeNodeRaw;
+    fn ts_node_next_named_sibling(node: NodeRaw) -> NodeRaw;
 
-    fn ts_node_prev_named_sibling(node: SyntaxTreeNodeRaw) -> SyntaxTreeNodeRaw;
+    fn ts_node_prev_named_sibling(node: NodeRaw) -> NodeRaw;
 
     /// Get the smallest node within this node that spans the given range of
     /// bytes or (row, column) positions
-    fn ts_node_descendant_for_byte_range(
-        node: SyntaxTreeNodeRaw,
-
-        start: u32,
-        end: u32,
-    ) -> SyntaxTreeNodeRaw;
+    fn ts_node_descendant_for_byte_range(node: NodeRaw, start: u32, end: u32) -> NodeRaw;
 
     /// Get the smallest named node within this node that spans the given range
     /// of bytes or (row, column) positions
-    fn ts_node_named_descendant_for_byte_range(
-        node: SyntaxTreeNodeRaw,
-        start: u32,
-        end: u32,
-    ) -> SyntaxTreeNodeRaw;
+    fn ts_node_named_descendant_for_byte_range(node: NodeRaw, start: u32, end: u32) -> NodeRaw;
 
     /// Get the node's start byte.
-    fn ts_node_start_byte(self_: SyntaxTreeNodeRaw) -> u32;
+    fn ts_node_start_byte(self_: NodeRaw) -> u32;
 
     /// Get the node's end byte.
-    fn ts_node_end_byte(node: SyntaxTreeNodeRaw) -> u32;
+    fn ts_node_end_byte(node: NodeRaw) -> u32;
 }

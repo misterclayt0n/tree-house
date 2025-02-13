@@ -13,7 +13,7 @@ use tree_sitter::{Capture, InactiveQueryCursor, Node, Pattern, Query, QueryCurso
 pub struct MatchedNode<'tree> {
     pub match_id: u32,
     pub pattern: Pattern,
-    pub syntax_node: Node<'tree>,
+    pub node: Node<'tree>,
     pub capture: Capture,
 }
 
@@ -28,13 +28,13 @@ impl<'tree> LayerQueryIter<'_, 'tree> {
             let (query_match, node_idx) = self.cursor.as_mut()?.next_matched_node()?;
             let match_id = query_match.id();
             let pattern = query_match.pattern();
-            let matched_node = query_match.matched_node(node_idx);
+            let node = query_match.matched_node(node_idx);
             self.peeked = Some(MatchedNode {
                 match_id,
                 pattern,
                 // NOTE: `Node` is cheap to clone, it's essentially Copy.
-                syntax_node: matched_node.syntax_node.clone(),
-                capture: matched_node.capture,
+                node: node.node.clone(),
+                capture: node.capture,
             });
         }
         self.peeked.as_ref()
@@ -240,7 +240,7 @@ where
                 .query_iter
                 .peek()
                 .filter(|matched_node| {
-                    matched_node.syntax_node.start_byte() <= self.current_injection.range.end
+                    matched_node.node.start_byte() <= self.current_injection.range.end
                 })
                 .cloned();
 
@@ -250,7 +250,7 @@ where
                         QueryIterEvent::ExitInjection { injection, state }
                     });
                 }
-                (Some(mat), _) if mat.syntax_node.start_byte() == mat.syntax_node.end_byte() => {
+                (Some(mat), _) if mat.node.start_byte() == mat.node.end_byte() => {
                     self.current_layer.query_iter.consume();
                     continue;
                 }
@@ -260,13 +260,13 @@ where
                     return Some(QueryIterEvent::Match(matched_node));
                 }
                 (Some(matched_node), Some(injection))
-                    if matched_node.syntax_node.start_byte() < injection.range.end =>
+                    if matched_node.node.start_byte() < injection.range.end =>
                 {
                     // consume match
                     let matched_node = self.current_layer.query_iter.consume();
                     // ignore nodes that are overlapped by the injection
-                    if matched_node.syntax_node.start_byte() <= injection.range.start
-                        || injection.range.end < matched_node.syntax_node.end_byte()
+                    if matched_node.node.start_byte() <= injection.range.start
+                        || injection.range.end < matched_node.node.end_byte()
                     {
                         return Some(QueryIterEvent::Match(matched_node));
                     }
@@ -296,7 +296,7 @@ impl<S> QueryIterEvent<'_, S> {
     pub fn start_byte(&self) -> u32 {
         match self {
             QueryIterEvent::EnterInjection(injection) => injection.range.start,
-            QueryIterEvent::Match(mat) => mat.syntax_node.start_byte(),
+            QueryIterEvent::Match(mat) => mat.node.start_byte(),
             QueryIterEvent::ExitInjection { injection, .. } => injection.range.end,
         }
     }

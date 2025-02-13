@@ -159,17 +159,17 @@ impl InjectionsQuery {
         for (i, matched_node) in query_match.matched_nodes().enumerate() {
             let capture = Some(matched_node.capture);
             if capture == self.injection_language_capture {
-                let range = matched_node.syntax_node.byte_range();
+                let range = matched_node.node.byte_range();
                 marker = Some(InjectionLanguageMarker::Match(
                     source.byte_slice(range.start as usize..range.end as usize),
                 ));
             } else if capture == self.injection_filename_capture {
-                let range = matched_node.syntax_node.byte_range();
+                let range = matched_node.node.byte_range();
                 marker = Some(InjectionLanguageMarker::Filename(
                     source.byte_slice(range.start as usize..range.end as usize),
                 ));
             } else if capture == self.injection_shebang_capture {
-                let range = matched_node.syntax_node.byte_range();
+                let range = matched_node.node.byte_range();
                 let node_slice = source.byte_slice(range.start as usize..range.end as usize);
 
                 // some languages allow space and newlines before the actual string content
@@ -216,7 +216,7 @@ impl InjectionsQuery {
             language,
             scope,
             include_children: properties.include_children,
-            node: query_match.matched_node(node_idx).syntax_node.clone(),
+            node: query_match.matched_node(node_idx).node.clone(),
             last_match: last_content_node == node_idx,
             pattern: query_match.pattern(),
         })
@@ -256,7 +256,7 @@ impl InjectionsQuery {
                 query_match.remove();
                 continue;
             };
-            let range = query_match.matched_node(node_idx).syntax_node.byte_range();
+            let range = query_match.matched_node(node_idx).node.byte_range();
             if mat.last_match {
                 query_match.remove();
             }
