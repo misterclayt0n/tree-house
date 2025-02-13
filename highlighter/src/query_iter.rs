@@ -60,12 +60,12 @@ struct QueryIterLayerManager<'a, 'tree, Loader, S> {
     syntax: &'tree Syntax,
     active_layers: HashMap<Layer, Box<ActiveLayer<'a, 'tree, S>>>,
     active_injections: Vec<Injection>,
+    init_layer_state_fn: fn(&'tree Syntax, &Injection) -> S,
 }
 
 impl<'a, 'tree: 'a, Loader, S> QueryIterLayerManager<'a, 'tree, Loader, S>
 where
     Loader: QueryLoader<'a>,
-    S: Default,
 {
     fn init_layer(&mut self, injection: Injection) -> Box<ActiveLayer<'a, 'tree, S>> {
         self.active_layers
@@ -90,7 +90,7 @@ where
                         )
                     });
                 Box::new(ActiveLayer {
-                    state: S::default(),
+                    state: (self.init_layer_state_fn)(self.syntax, &injection),
                     query_iter: LayerQueryIter {
                         cursor,
                         peeked: None,
@@ -101,7 +101,7 @@ where
     }
 }
 
-pub struct QueryIter<'a, 'tree, Loader: QueryLoader<'a>, LayerState: Default = ()> {
+pub struct QueryIter<'a, 'tree, Loader: QueryLoader<'a>, LayerState = ()> {
     layer_manager: Box<QueryIterLayerManager<'a, 'tree, Loader, LayerState>>,
     current_layer: Box<ActiveLayer<'a, 'tree, LayerState>>,
     current_injection: Injection,
@@ -110,12 +110,12 @@ pub struct QueryIter<'a, 'tree, Loader: QueryLoader<'a>, LayerState: Default = (
 impl<'a, 'tree: 'a, Loader, LayerState> QueryIter<'a, 'tree, Loader, LayerState>
 where
     Loader: QueryLoader<'a>,
-    LayerState: Default,
 {
     pub fn new(
         syntax: &'tree Syntax,
         src: RopeSlice<'a>,
         loader: Loader,
+        init_layer_state_fn: fn(&'tree Syntax, &Injection) -> LayerState,
         range: impl RangeBounds<u32>,
     ) -> Self {
         let start = match range.start_bound() {
@@ -143,6 +143,7 @@ where
             // TODO: reuse allocations with an allocation pool
             active_layers: HashMap::with_capacity(8),
             active_injections: Vec::with_capacity(8),
+            init_layer_state_fn,
         });
         Self {
             current_layer: layer_manager.init_layer(injection.clone()),
@@ -224,7 +225,6 @@ where
 impl<'cursor, 'tree: 'cursor, Loader, S> Iterator for QueryIter<'cursor, 'tree, Loader, S>
 where
     Loader: QueryLoader<'cursor>,
-    S: Default,
 {
     type Item = QueryIterEvent<'tree, S>;
 

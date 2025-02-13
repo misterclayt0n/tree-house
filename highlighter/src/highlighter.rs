@@ -126,7 +126,13 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
         loader: &'a Loader,
         range: impl RangeBounds<u32>,
     ) -> Self {
-        let mut query = QueryIter::new(syntax, src, HighlightQueryLoader(loader), range);
+        let mut query = QueryIter::new(
+            syntax,
+            src,
+            HighlightQueryLoader(loader),
+            |_, _| LayerData::default(),
+            range,
+        );
         let active_language = query.current_language();
         let mut res = Highlighter {
             active_config: query.loader().0.get_config(active_language),
