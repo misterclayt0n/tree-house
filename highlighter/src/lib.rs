@@ -1,3 +1,4 @@
+use locals::Locals;
 use ropey::RopeSlice;
 
 use slab::Slab;
@@ -108,6 +109,7 @@ impl Syntax {
             }],
             injections: Vec::new(),
             parent: None,
+            locals: Locals::default(),
         };
         let mut layers = Slab::with_capacity(32);
         let root = layers.insert(root_layer);
@@ -213,6 +215,7 @@ pub struct LayerData {
     /// internal flags used during parsing to track incremental invalidation
     flags: LayerUpdateFlags,
     parent: Option<Layer>,
+    locals: Locals,
 }
 
 /// This PartialEq implementation only checks if that

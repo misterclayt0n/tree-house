@@ -56,7 +56,8 @@ impl Syntax {
                 // always parse if this layer has never been parsed before
                 layer_data.parse(&mut parser, source, loader)?;
             }
-            self.run_injection_query(layer, edits, source, loader, |layer| queue.push(layer))
+            self.run_injection_query(layer, edits, source, loader, |layer| queue.push(layer));
+            self.run_local_query(layer, source, loader);
         }
 
         if self.layer(self.root).parse_tree.is_none() {

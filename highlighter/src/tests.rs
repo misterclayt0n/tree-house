@@ -10,8 +10,8 @@ use tree_sitter::Grammar;
 
 use crate::config::{LanguageConfig, LanguageLoader};
 use crate::fixtures::{check_highlighter_fixture, check_injection_fixture};
-use crate::highlighter::{Highlight, HighlightQuery};
-use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
+use crate::highlighter::Highlight;
+use crate::injections_query::InjectionLanguageMarker;
 use crate::Language;
 
 static GRAMMARS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
@@ -37,6 +37,7 @@ fn skidder_config() -> skidder::Config {
 #[derive(Debug, Clone, Default)]
 struct Overwrites {
     highlights: Option<String>,
+    locals: Option<String>,
     injections: Option<String>,
 }
 
@@ -46,7 +47,15 @@ fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
     let parser_path = skidder::build_grammar(&skidder_config, grammar, false).unwrap();
     let grammar = unsafe { Grammar::new(grammar, &parser_path).unwrap() };
     let highlights_query_path = grammar_dir.join("highlights.scm");
-    let highlight_query = HighlightQuery::new(
+    let injections_query_path = grammar_dir.join("injections.scm");
+    if !injections_query_path.exists() {
+        println!("skipping {injections_query_path:?}");
+    }
+    let locals_query_path = grammar_dir.join("locals.scm");
+    if !locals_query_path.exists() {
+        println!("skipping {locals_query_path:?}");
+    }
+    LanguageConfig::new(
         grammar,
         &overwrites.highlights.clone().unwrap_or_else(|| {
             fs::read_to_string(&highlights_query_path)
@@ -59,26 +68,18 @@ fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
                 .unwrap()
         }),
         &highlights_query_path,
-    )
-    .unwrap();
-    let injections_query_path = grammar_dir.join("injections.scm");
-    if !injections_query_path.exists() {
-        println!("skipping {injections_query_path:?}");
-    }
-    let injections_query = InjectionsQuery::new(
-        grammar,
         &overwrites
             .injections
             .clone()
             .unwrap_or_else(|| fs::read_to_string(&injections_query_path).unwrap_or_default()),
         &injections_query_path,
+        &overwrites
+            .locals
+            .clone()
+            .unwrap_or_else(|| fs::read_to_string(&locals_query_path).unwrap_or_default()),
+        &locals_query_path,
     )
-    .unwrap();
-    LanguageConfig {
-        grammar,
-        highlight_query,
-        injections_query,
-    }
+    .unwrap()
 }
 
 #[derive(Debug)]
@@ -173,9 +174,7 @@ impl LanguageLoader for TestLanguageLoader {
                 &self.overwrites[lang.idx()],
             );
             let mut theme = self.test_theme.borrow_mut();
-            config
-                .highlight_query
-                .configure(|scope| Highlight(theme.insert_full(scope.to_owned()).0 as u32));
+            config.configure(|scope| Highlight(theme.insert_full(scope.to_owned()).0 as u32));
             config
         });
         Some(config)
@@ -232,6 +231,12 @@ fn highlight_overlaps_with_injection() {
     // The comment node is highlighted both by the comment capture and as an injection for the
     // comment grammar.
     highlight_fixture(&loader, "highlighter/comment.html");
+}
+
+#[test]
+fn rust_parameter_locals() {
+    let loader = TestLanguageLoader::new();
+    highlight_fixture(&loader, "highlighter/rust_parameter_locals.rs");
 }
 
 #[test]

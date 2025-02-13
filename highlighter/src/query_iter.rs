@@ -152,10 +152,17 @@ where
         }
     }
 
+    #[inline]
+    pub fn source(&self) -> RopeSlice<'a> {
+        self.layer_manager.src
+    }
+
+    #[inline]
     pub fn syntax(&self) -> &'tree Syntax {
         self.layer_manager.syntax
     }
 
+    #[inline]
     pub fn loader(&mut self) -> &mut Loader {
         &mut self.layer_manager.loader
     }

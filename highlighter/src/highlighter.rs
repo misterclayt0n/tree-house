@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::mem::replace;
 use std::ops::RangeBounds;
 use std::path::Path;
@@ -5,12 +6,16 @@ use std::slice;
 use std::sync::Arc;
 
 use crate::config::{LanguageConfig, LanguageLoader};
+use crate::locals::ScopeCursor;
 use crate::query_iter::{MatchedNode, QueryIter, QueryIterEvent, QueryLoader};
-use crate::{Language, Layer, Syntax};
+use crate::{Injection, Language, Layer, Syntax};
 use arc_swap::ArcSwap;
+use hashbrown::HashMap;
 use ropey::RopeSlice;
-use tree_sitter::query::Query;
-use tree_sitter::{query, Grammar};
+use tree_sitter::{
+    query::{self, Query, UserPredicate},
+    Capture, Grammar, Pattern,
+};
 
 /// Contains the data needed to highlight code written in a particular language.
 ///
@@ -18,23 +23,73 @@ use tree_sitter::{query, Grammar};
 #[derive(Debug)]
 pub struct HighlightQuery {
     pub query: Query,
-    pub(crate) highlight_indices: ArcSwap<Vec<Highlight>>,
+    highlight_indices: ArcSwap<Vec<Highlight>>,
+    #[allow(dead_code)]
+    // TODO: `(#is(-not)? local)` predicates
+    is_local_patterns: HashMap<Pattern, bool>,
+    local_reference_capture: Option<Capture>,
 }
 
 impl HighlightQuery {
-    pub fn new(
+    pub(crate) fn new(
         grammar: Grammar,
-        query_text: &str,
-        query_path: impl AsRef<Path>,
+        highlight_query_text: &str,
+        highlight_query_path: impl AsRef<Path>,
+        local_query_text: &str,
     ) -> Result<Self, query::ParseError> {
-        let query = Query::new(grammar, query_text, query_path, |_pattern, predicate| {
-            Err(format!("unsupported predicate {predicate}").into())
-        })?;
+        // Concatenate the highlights and locals queries.
+        let mut query_source =
+            String::with_capacity(highlight_query_text.len() + local_query_text.len());
+        query_source.push_str(highlight_query_text);
+        query_source.push_str(local_query_text);
+
+        let mut is_local_patterns = HashMap::new();
+        let mut query = Query::new(
+            grammar,
+            &query_source,
+            highlight_query_path,
+            |pattern, predicate| {
+                match predicate {
+                    // Allow the `(#set! local.scope-inherits <bool>)` property to be parsed.
+                    // This information is not used by this query though, it's used in the
+                    // injection query instead.
+                    UserPredicate::SetProperty {
+                        key: "local.scope-inherits",
+                        ..
+                    } => (),
+                    // TODO: `#is(-not)?` really needs to take a capture.
+                    UserPredicate::IsPropertySet {
+                        negate,
+                        key: "local",
+                        val: None,
+                    } => {
+                        is_local_patterns.insert(pattern, !negate);
+                    }
+                    _ => return Err(format!("unsupported predicate {predicate}").into()),
+                }
+                Ok(())
+            },
+        )?;
+
+        // The highlight query only cares about local.reference captures. All scope and definition
+        // captures can be disabled.
+        query.disable_capture("local.scope");
+        let local_definition_captures: Vec<_> = query
+            .captures()
+            .filter(|&(_, name)| name.starts_with("local.definition."))
+            .map(|(_, name)| Box::<str>::from(name))
+            .collect();
+        for name in local_definition_captures {
+            query.disable_capture(&name);
+        }
+
         Ok(Self {
             highlight_indices: ArcSwap::from_pointee(vec![
                 Highlight::NONE;
                 query.num_captures() as usize
             ]),
+            is_local_patterns,
+            local_reference_capture: query.get_capture("local.reference"),
             query,
         })
     }
@@ -55,11 +110,11 @@ impl HighlightQuery {
     /// When highlighting, results are returned as `Highlight` values, configured by this function.
     /// The meaning of these indices is up to the user of the implementation. The highlighter
     /// treats the indices as entirely opaque.
-    pub fn configure(&self, mut f: impl FnMut(&str) -> Highlight) {
+    pub(crate) fn configure(&self, f: &mut impl FnMut(&str) -> Highlight) {
         let highlight_indices = self
             .query
             .captures()
-            .map(move |(_, capture_name)| f(capture_name))
+            .map(|(_, capture_name)| f(capture_name))
             .collect();
         self.highlight_indices.store(Arc::new(highlight_indices));
     }
@@ -79,15 +134,28 @@ struct HighlightedNode {
     highlight: Highlight,
 }
 
-#[derive(Debug, Default)]
-pub struct LayerData {
+#[derive(Debug)]
+pub struct LayerData<'tree> {
     parent_highlights: usize,
     dormant_highlights: Vec<HighlightedNode>,
+    scope_cursor: ScopeCursor<'tree>,
+}
+
+impl<'tree> LayerData<'tree> {
+    fn new(syntax: &'tree Syntax, injection: &Injection) -> Self {
+        let scope_cursor = syntax.layer(injection.layer).locals.scope_cursor(0);
+
+        Self {
+            parent_highlights: Default::default(),
+            dormant_highlights: Default::default(),
+            scope_cursor,
+        }
+    }
 }
 
 pub struct Highlighter<'a, 'tree, Loader: LanguageLoader> {
-    query: QueryIter<'a, 'tree, HighlightQueryLoader<&'a Loader>, LayerData>,
-    next_query_event: Option<QueryIterEvent<'tree, LayerData>>,
+    query: QueryIter<'a, 'tree, HighlightQueryLoader<&'a Loader>, LayerData<'tree>>,
+    next_query_event: Option<QueryIterEvent<'tree, LayerData<'tree>>>,
     active_highlights: Vec<HighlightedNode>,
     next_highlight_end: u32,
     next_highlight_start: u32,
@@ -130,7 +198,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
             syntax,
             src,
             HighlightQueryLoader(loader),
-            |_, _| LayerData::default(),
+            LayerData::new,
             range,
         );
         let active_language = query.current_language();
@@ -242,6 +310,34 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
             return;
         }
 
+        let config = self
+            .active_config
+            .expect("must have an active config to emit matches");
+
+        let highlight = if Some(node.capture) == config.highlight_query.local_reference_capture {
+            // If this capture was a `@local.reference` from the locals queries, look up the
+            // text of the node in the current locals cursor and use that highlight.
+            let text: Cow<str> = self
+                .query
+                .source()
+                .byte_slice(node.node.start_byte() as usize..node.node.end_byte() as usize)
+                .into();
+            let scope_cursor = &mut self.query.current_injection().1.scope_cursor;
+            let scope = scope_cursor.advance(node.node.start_byte());
+            let Some(capture) = scope_cursor.locals.lookup_reference(scope, &text) else {
+                return;
+            };
+            config
+                .injection_query
+                .local_definition_captures
+                .load()
+                .get(&capture)
+                .copied()
+                .unwrap_or(Highlight::NONE)
+        } else {
+            config.highlight_query.highlight_indices.load()[node.capture.idx()]
+        };
+
         // If multiple patterns match this exact node, prefer the last one which matched.
         // This matches the precedence of Neovim, Zed, and tree-sitter-cli.
         if !*first_highlight
@@ -252,9 +348,6 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
         {
             self.active_highlights.pop();
         }
-        let highlight = self.active_config.map_or(Highlight::NONE, |config| {
-            config.highlight_query.highlight_indices.load()[node.capture.idx()]
-        });
         if highlight != Highlight::NONE {
             self.active_highlights.push(HighlightedNode {
                 end: range.end,

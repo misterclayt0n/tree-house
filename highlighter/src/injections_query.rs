@@ -2,13 +2,17 @@ use std::cmp::Reverse;
 use std::iter::{self, Peekable};
 use std::mem::take;
 use std::path::Path;
+use std::sync::Arc;
 
-use hashbrown::HashMap;
+use arc_swap::ArcSwap;
+use hashbrown::{HashMap, HashSet};
 use once_cell::sync::Lazy;
 use regex_cursor::engines::meta::Regex;
 use ropey::RopeSlice;
 
 use crate::config::{LanguageConfig, LanguageLoader};
+use crate::highlighter::Highlight;
+use crate::locals::Locals;
 use crate::parse::LayerUpdateFlags;
 use crate::{Injection, Language, Layer, LayerData, Range, Syntax, TREE_SITTER_MATCH_LIMIT};
 use tree_sitter::query::UserPredicate;
@@ -80,64 +84,129 @@ enum IncludedChildren {
 
 #[derive(Debug)]
 pub struct InjectionsQuery {
-    query: Query,
+    injection_query: Query,
     injection_properties: HashMap<Pattern, InjectionProperties>,
     injection_content_capture: Option<Capture>,
     injection_language_capture: Option<Capture>,
     injection_filename_capture: Option<Capture>,
     injection_shebang_capture: Option<Capture>,
+    // Note that the injections query is concatenated with the locals query.
+    pub(crate) local_query: Query,
+    // TODO: Use a Vec<bool> instead?
+    pub(crate) not_scope_inherits: HashSet<Pattern>,
+    pub(crate) local_scope_capture: Option<Capture>,
+    pub(crate) local_definition_captures: ArcSwap<HashMap<Capture, Highlight>>,
 }
 
 impl InjectionsQuery {
     pub fn new(
         grammar: Grammar,
-        query_text: &str,
-        query_path: impl AsRef<Path>,
+        injection_query_text: &str,
+        injection_query_path: impl AsRef<Path>,
+        local_query_text: &str,
+        local_query_path: impl AsRef<Path>,
     ) -> Result<Self, query::ParseError> {
+        let mut query_source =
+            String::with_capacity(injection_query_text.len() + local_query_text.len());
+        query_source.push_str(injection_query_text);
+        query_source.push_str(local_query_text);
+
         let mut injection_properties: HashMap<Pattern, InjectionProperties> = HashMap::new();
-        let query = Query::new(grammar, query_text, query_path, |pattern, predicate| {
-            match predicate {
-                UserPredicate::SetProperty {
-                    key: "injection.include-unnamed-children",
-                    val: None,
-                } => {
-                    injection_properties
-                        .entry(pattern)
-                        .or_default()
-                        .include_children = IncludedChildren::Unnamed
+        let mut not_scope_inherits = HashSet::new();
+        let injection_query = Query::new(
+            grammar,
+            injection_query_text,
+            injection_query_path,
+            |pattern, predicate| {
+                match predicate {
+                    // injections
+                    UserPredicate::SetProperty {
+                        key: "injection.include-unnamed-children",
+                        val: None,
+                    } => {
+                        injection_properties
+                            .entry(pattern)
+                            .or_default()
+                            .include_children = IncludedChildren::Unnamed
+                    }
+                    UserPredicate::SetProperty {
+                        key: "injection.include-children",
+                        val: None,
+                    } => {
+                        injection_properties
+                            .entry(pattern)
+                            .or_default()
+                            .include_children = IncludedChildren::All
+                    }
+                    UserPredicate::SetProperty {
+                        key: "injection.language",
+                        val: Some(lang),
+                    } => {
+                        injection_properties.entry(pattern).or_default().language =
+                            Some(lang.into())
+                    }
+                    UserPredicate::SetProperty {
+                        key: "injection.combined",
+                        val: None,
+                    } => injection_properties.entry(pattern).or_default().combined = true,
+                    predicate => {
+                        return Err(format!("unsupported predicate {predicate}").into());
+                    }
                 }
-                UserPredicate::SetProperty {
-                    key: "injection.include-children",
-                    val: None,
-                } => {
-                    injection_properties
-                        .entry(pattern)
-                        .or_default()
-                        .include_children = IncludedChildren::All
+                Ok(())
+            },
+        )?;
+        let mut local_query = Query::new(
+            grammar,
+            local_query_text,
+            local_query_path,
+            |pattern, predicate| {
+                match predicate {
+                    UserPredicate::SetProperty {
+                        key: "local.scope-inherits",
+                        val,
+                    } => {
+                        if val.is_some_and(|val| val != "true") {
+                            not_scope_inherits.insert(pattern);
+                        }
+                    }
+                    predicate => {
+                        return Err(format!("unsupported predicate {predicate}").into());
+                    }
                 }
-                UserPredicate::SetProperty {
-                    key: "injection.language",
-                    val: Some(lang),
-                } => injection_properties.entry(pattern).or_default().language = Some(lang.into()),
-                UserPredicate::SetProperty {
-                    key: "injection.combined",
-                    val: None,
-                } => injection_properties.entry(pattern).or_default().combined = true,
-                predicate => {
-                    return Err(format!("unsupported predicate {predicate}").into());
-                }
-            }
-            Ok(())
-        })?;
+                Ok(())
+            },
+        )?;
+
+        // The injection queries do not track references - these are read by the highlight
+        // query instead.
+        local_query.disable_capture("local.reference");
 
         Ok(InjectionsQuery {
             injection_properties,
-            injection_content_capture: query.get_capture("injection.content"),
-            injection_language_capture: query.get_capture("injection.language"),
-            injection_filename_capture: query.get_capture("injection.filename"),
-            injection_shebang_capture: query.get_capture("injection.shebang"),
-            query,
+            injection_content_capture: injection_query.get_capture("injection.content"),
+            injection_language_capture: injection_query.get_capture("injection.language"),
+            injection_filename_capture: injection_query.get_capture("injection.filename"),
+            injection_shebang_capture: injection_query.get_capture("injection.shebang"),
+            injection_query,
+            not_scope_inherits,
+            local_scope_capture: local_query.get_capture("local.scope"),
+            local_definition_captures: ArcSwap::from_pointee(HashMap::new()),
+            local_query,
         })
+    }
+
+    pub(crate) fn configure(&self, f: &mut impl FnMut(&str) -> Highlight) {
+        let local_definition_captures = self
+            .local_query
+            .captures()
+            .filter_map(|(capture, name)| {
+                let suffix = name.strip_prefix("local.definition.")?;
+                Some((capture, f(suffix)))
+            })
+            .collect();
+        self.local_definition_captures
+            .store(Arc::new(local_definition_captures));
     }
 
     fn process_match<'a, 'tree>(
@@ -245,7 +314,7 @@ impl InjectionsQuery {
         let mut cursor = InactiveQueryCursor::new();
         cursor.set_byte_range(0..u32::MAX);
         cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
-        let mut cursor = cursor.execute_query(&self.query, node, source);
+        let mut cursor = cursor.execute_query(&self.injection_query, node, source);
         let injection_content_capture = self.injection_content_capture.unwrap();
         let iter = iter::from_fn(move || loop {
             let (query_match, node_idx) = cursor.next_matched_node()?;
@@ -322,7 +391,7 @@ impl Syntax {
         self.map_injections(layer, None, edits);
         let layer_data = &mut self.layer_mut(layer);
         let Some(LanguageConfig {
-            ref injections_query,
+            injection_query: ref injections_query,
             ..
         }) = loader.get_config(layer_data.language)
         else {
@@ -513,6 +582,7 @@ impl Syntax {
                     injections: Vec::new(),
                     flags: LayerUpdateFlags::default(),
                     parent: Some(parent),
+                    locals: Locals::default(),
                 });
                 Layer(layer as u32)
             }
