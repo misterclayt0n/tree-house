@@ -168,6 +168,11 @@ where
     }
 
     #[inline]
+    pub fn current_layer(&self) -> Layer {
+        self.current_injection.layer
+    }
+
+    #[inline]
     pub fn current_injection(&mut self) -> (Injection, &mut LayerState) {
         (
             self.current_injection.clone(),
@@ -229,9 +234,9 @@ where
     }
 }
 
-impl<'cursor, 'tree: 'cursor, Loader, S> Iterator for QueryIter<'cursor, 'tree, Loader, S>
+impl<'a, 'tree: 'a, Loader, S> Iterator for QueryIter<'a, 'tree, Loader, S>
 where
-    Loader: QueryLoader<'cursor>,
+    Loader: QueryLoader<'a>,
 {
     type Item = QueryIterEvent<'tree, S>;
 
@@ -242,14 +247,9 @@ where
                 .injections
                 .peek()
                 .filter(|injection| injection.range.start <= self.current_injection.range.end);
-            let next_match = self
-                .current_layer
-                .query_iter
-                .peek()
-                .filter(|matched_node| {
-                    matched_node.node.start_byte() <= self.current_injection.range.end
-                })
-                .cloned();
+            let next_match = self.current_layer.query_iter.peek().filter(|matched_node| {
+                matched_node.node.start_byte() <= self.current_injection.range.end
+            });
 
             match (next_match, next_injection) {
                 (None, None) => {
@@ -257,7 +257,7 @@ where
                         QueryIterEvent::ExitInjection { injection, state }
                     });
                 }
-                (Some(mat), _) if mat.node.start_byte() == mat.node.end_byte() => {
+                (Some(mat), _) if mat.node.byte_range().is_empty() => {
                     self.current_layer.query_iter.consume();
                     continue;
                 }

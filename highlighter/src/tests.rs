@@ -245,6 +245,16 @@ fn rust_parameter_locals() {
 }
 
 #[test]
+fn parameters_within_injections_within_injections() {
+    let loader = TestLanguageLoader::new();
+    // The root language is Rust. Then markdown is injected in a doc comment. Then within that
+    // we have a code fence which is Rust again. Within that block we check that locals are
+    // highlighted as expected.
+    highlight_fixture(&loader, "highlighter/injectionception.rs");
+    injection_fixture(&loader, "injections/injectionception.rs");
+}
+
+#[test]
 fn combined_injection() {
     let mut loader = TestLanguageLoader::new();
     loader.shadow_injections(

@@ -160,6 +160,11 @@ pub struct Highlighter<'a, 'tree, Loader: LanguageLoader> {
     next_highlight_end: u32,
     next_highlight_start: u32,
     active_config: Option<&'a LanguageConfig>,
+    /// The current injection layer of the query iterator.
+    ///
+    /// We track this in the highlighter (rather than calling `QueryIter::current_layer`) because
+    /// the highlighter peeks events from the QueryIter (see `Self::advance_query_iter`).
+    current_layer: Layer,
 }
 
 pub struct HighlightList<'a>(slice::Iter<'a, HighlightedNode>);
@@ -205,6 +210,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
         let mut res = Highlighter {
             active_config: query.loader().0.get_config(active_language),
             next_query_event: None,
+            current_layer: query.current_layer(),
             active_highlights: Vec::new(),
             next_highlight_end: u32::MAX,
             next_highlight_start: 0,
@@ -268,6 +274,11 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
     }
 
     fn advance_query_iter(&mut self) -> Option<QueryIterEvent<'tree, LayerData>> {
+        // Track the current layer **before** calling `QueryIter::next`. The QueryIter moves
+        // to the next event with `QueryIter::next` but we're treating that event as peeked - it
+        // hasn't occurred yet - so the current layer is the one the query iter was on _before_
+        // `QueryIter::next`.
+        self.current_layer = self.query.current_layer();
         let event = replace(&mut self.next_query_event, self.query.next());
         self.next_highlight_start = self
             .next_query_event
@@ -286,7 +297,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
     }
 
     fn enter_injection(&mut self) {
-        let active_language = self.query.current_language();
+        let active_language = self.query.syntax().layer(self.current_layer).language;
         self.active_config = self.query.loader().0.get_config(active_language);
         let data = self.query.current_injection().1;
         data.parent_highlights = self.active_highlights.len();
@@ -306,9 +317,11 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
 
     fn start_highlight(&mut self, node: MatchedNode, first_highlight: &mut bool) {
         let range = node.node.byte_range();
-        if range.is_empty() {
-            return;
-        }
+        // `<QueryIter as Iterator>::next` skips matches with empty ranges.
+        debug_assert!(
+            !range.is_empty(),
+            "QueryIter should not emit matches with empty ranges"
+        );
 
         let config = self
             .active_config
@@ -320,10 +333,10 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
             let text: Cow<str> = self
                 .query
                 .source()
-                .byte_slice(node.node.start_byte() as usize..node.node.end_byte() as usize)
+                .byte_slice(range.start as usize..range.end as usize)
                 .into();
-            let scope_cursor = &mut self.query.current_injection().1.scope_cursor;
-            let scope = scope_cursor.advance(node.node.start_byte());
+            let scope_cursor = &mut self.query.layer_state(self.current_layer).scope_cursor;
+            let scope = scope_cursor.advance(range.start);
             let Some(capture) = scope_cursor.locals.lookup_reference(scope, &text) else {
                 return;
             };
