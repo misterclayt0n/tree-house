@@ -10,11 +10,12 @@ use crate::locals::ScopeCursor;
 use crate::query_iter::{MatchedNode, QueryIter, QueryIterEvent, QueryLoader};
 use crate::{Injection, Language, Layer, Syntax};
 use arc_swap::ArcSwap;
-use hashbrown::HashMap;
+use hashbrown::HashSet;
 use ropey::RopeSlice;
+use tree_sitter::Pattern;
 use tree_sitter::{
     query::{self, Query, UserPredicate},
-    Capture, Grammar, Pattern,
+    Capture, Grammar,
 };
 
 /// Contains the data needed to highlight code written in a particular language.
@@ -25,8 +26,8 @@ pub struct HighlightQuery {
     pub query: Query,
     highlight_indices: ArcSwap<Vec<Highlight>>,
     #[allow(dead_code)]
-    // TODO: `(#is(-not)? local)` predicates
-    is_local_patterns: HashMap<Pattern, bool>,
+    /// Patterns that do not match when the node is a local.
+    non_local_patterns: HashSet<Pattern>,
     local_reference_capture: Option<Capture>,
 }
 
@@ -43,7 +44,7 @@ impl HighlightQuery {
         query_source.push_str(highlight_query_text);
         query_source.push_str(local_query_text);
 
-        let mut is_local_patterns = HashMap::new();
+        let mut non_local_patterns = HashSet::new();
         let mut query = Query::new(
             grammar,
             &query_source,
@@ -57,13 +58,14 @@ impl HighlightQuery {
                         key: "local.scope-inherits",
                         ..
                     } => (),
-                    // TODO: `#is(-not)?` really needs to take a capture.
+                    // TODO: `(#is(-not)? local)` applies to the entire pattern. Ideally you
+                    // should be able to supply capture(s?) which are each checked.
                     UserPredicate::IsPropertySet {
-                        negate,
+                        negate: true,
                         key: "local",
                         val: None,
                     } => {
-                        is_local_patterns.insert(pattern, !negate);
+                        non_local_patterns.insert(pattern);
                     }
                     _ => return Err(format!("unsupported predicate {predicate}").into()),
                 }
@@ -88,7 +90,7 @@ impl HighlightQuery {
                 Highlight::NONE;
                 query.num_captures() as usize
             ]),
-            is_local_patterns,
+            non_local_patterns,
             local_reference_capture: query.get_capture("local.reference"),
             query,
         })
@@ -348,6 +350,25 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                 .copied()
                 .unwrap_or(Highlight::NONE)
         } else {
+            // If the pattern is marked with `(#is-not? local)` and the matched node is a
+            // reference to a local, discard this match.
+            if config
+                .highlight_query
+                .non_local_patterns
+                .contains(&node.pattern)
+            {
+                let text: Cow<str> = self
+                    .query
+                    .source()
+                    .byte_slice(range.start as usize..range.end as usize)
+                    .into();
+                let scope_cursor = &mut self.query.layer_state(self.current_layer).scope_cursor;
+                let scope = scope_cursor.advance(range.start);
+                if scope_cursor.locals.lookup_reference(scope, &text).is_some() {
+                    return;
+                };
+            }
+
             config.highlight_query.highlight_indices.load()[node.capture.idx()]
         };
 

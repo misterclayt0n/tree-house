@@ -255,6 +255,21 @@ fn parameters_within_injections_within_injections() {
 }
 
 #[test]
+fn non_local_pattern() {
+    let mut loader = TestLanguageLoader::new();
+    // Pretend that `this` is a builtin like `self`, but only when it is not a parameter.
+    loader.shadow_highlights(
+        "rust",
+        r#"
+((identifier) @variable.builtin
+ (#eq? @variable.builtin "this")
+ (#is-not? local))
+"#,
+    );
+    highlight_fixture(&loader, "highlighter/non_local.rs");
+}
+
+#[test]
 fn combined_injection() {
     let mut loader = TestLanguageLoader::new();
     loader.shadow_injections(
