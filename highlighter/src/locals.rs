@@ -142,6 +142,11 @@ impl ScopeCursor<'_> {
         self.scope_stack.push((active_scope, child_idx));
         active_scope
     }
+
+    pub fn current_scope(&self) -> Scope {
+        // The root scope is always active so `scope_stack` is never empty.
+        self.scope_stack.last().unwrap().0
+    }
 }
 
 #[derive(Debug)]

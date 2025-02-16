@@ -12,11 +12,11 @@ use crate::{Injection, Language, Layer, Syntax};
 use arc_swap::ArcSwap;
 use hashbrown::HashSet;
 use ropey::RopeSlice;
-use tree_sitter::Pattern;
 use tree_sitter::{
     query::{self, Query, UserPredicate},
     Capture, Grammar,
 };
+use tree_sitter::{Pattern, QueryMatch};
 
 /// Contains the data needed to highlight code written in a particular language.
 ///
@@ -137,27 +137,23 @@ struct HighlightedNode {
 }
 
 #[derive(Debug)]
-pub struct LayerData<'tree> {
+pub struct LayerData {
     parent_highlights: usize,
     dormant_highlights: Vec<HighlightedNode>,
-    scope_cursor: ScopeCursor<'tree>,
 }
 
-impl<'tree> LayerData<'tree> {
-    fn new(syntax: &'tree Syntax, injection: &Injection) -> Self {
-        let scope_cursor = syntax.layer(injection.layer).locals.scope_cursor(0);
-
+impl LayerData {
+    fn new(_syntax: &Syntax, _injection: &Injection) -> Self {
         Self {
             parent_highlights: Default::default(),
             dormant_highlights: Default::default(),
-            scope_cursor,
         }
     }
 }
 
 pub struct Highlighter<'a, 'tree, Loader: LanguageLoader> {
-    query: QueryIter<'a, 'tree, HighlightQueryLoader<&'a Loader>, LayerData<'tree>>,
-    next_query_event: Option<QueryIterEvent<'tree, LayerData<'tree>>>,
+    query: QueryIter<'a, 'tree, HighlightQueryLoader<&'a Loader>, LayerData>,
+    next_query_event: Option<QueryIterEvent<'tree, LayerData>>,
     active_highlights: Vec<HighlightedNode>,
     next_highlight_end: u32,
     next_highlight_start: u32,
@@ -337,9 +333,13 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                 .source()
                 .byte_slice(range.start as usize..range.end as usize)
                 .into();
-            let scope_cursor = &mut self.query.layer_state(self.current_layer).scope_cursor;
-            let scope = scope_cursor.advance(range.start);
-            let Some(capture) = scope_cursor.locals.lookup_reference(scope, &text) else {
+            let Some(capture) = self
+                .query
+                .syntax()
+                .layer(self.current_layer)
+                .locals
+                .lookup_reference(node.scope, &text)
+            else {
                 return;
             };
             config
@@ -350,25 +350,6 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                 .copied()
                 .unwrap_or(Highlight::NONE)
         } else {
-            // If the pattern is marked with `(#is-not? local)` and the matched node is a
-            // reference to a local, discard this match.
-            if config
-                .highlight_query
-                .non_local_patterns
-                .contains(&node.pattern)
-            {
-                let text: Cow<str> = self
-                    .query
-                    .source()
-                    .byte_slice(range.start as usize..range.end as usize)
-                    .into();
-                let scope_cursor = &mut self.query.layer_state(self.current_layer).scope_cursor;
-                let scope = scope_cursor.advance(range.start);
-                if scope_cursor.locals.lookup_reference(scope, &text).is_some() {
-                    return;
-                };
-            }
-
             config.highlight_query.highlight_indices.load()[node.capture.idx()]
         };
 
@@ -399,5 +380,47 @@ impl<'a, T: LanguageLoader> QueryLoader<'a> for HighlightQueryLoader<&'a T> {
         self.0
             .get_config(lang)
             .map(|config| &config.highlight_query.query)
+    }
+
+    fn are_predicates_satisfied(
+        &self,
+        lang: Language,
+        mat: &QueryMatch<'_, '_>,
+        source: RopeSlice<'_>,
+        locals_cursor: &ScopeCursor<'_>,
+    ) -> bool {
+        let highlight_query = &self
+            .0
+            .get_config(lang)
+            .expect("must have a config to emit matches")
+            .highlight_query;
+
+        // Highlight queries should reject the match when a pattern is marked with
+        // `(#is-not? local)` and any capture in the pattern matches a definition in scope.
+        //
+        // TODO: in the future we should propose that `#is-not? local` takes one or more
+        // captures as arguments. Ideally we would check that the captured node is also captured
+        // by a `local.reference` capture from the locals query but that's really messy to pass
+        // around that information. For now we assume that all matches in the pattern are also
+        // captured as `local.reference` in the locals, which covers most cases.
+        if highlight_query.local_reference_capture.is_some()
+            && highlight_query.non_local_patterns.contains(&mat.pattern())
+        {
+            let has_local_reference = mat.matched_nodes().any(|n| {
+                let range = n.node.byte_range();
+                let text: Cow<str> = source
+                    .byte_slice(range.start as usize..range.end as usize)
+                    .into();
+                locals_cursor
+                    .locals
+                    .lookup_reference(locals_cursor.current_scope(), &text)
+                    .is_some()
+            });
+            if has_local_reference {
+                return false;
+            }
+        }
+
+        true
     }
 }

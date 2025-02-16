@@ -6,8 +6,13 @@ use std::ops::RangeBounds;
 use hashbrown::HashMap;
 use ropey::RopeSlice;
 
-use crate::{Injection, Language, Layer, Range, Syntax, TREE_SITTER_MATCH_LIMIT};
-use tree_sitter::{Capture, InactiveQueryCursor, Node, Pattern, Query, QueryCursor, RopeInput};
+use crate::{
+    locals::{Scope, ScopeCursor},
+    Injection, Language, Layer, Range, Syntax, TREE_SITTER_MATCH_LIMIT,
+};
+use tree_sitter::{
+    Capture, InactiveQueryCursor, Node, Pattern, Query, QueryCursor, QueryMatch, RopeInput,
+};
 
 #[derive(Debug, Clone)]
 pub struct MatchedNode<'tree> {
@@ -15,27 +20,51 @@ pub struct MatchedNode<'tree> {
     pub pattern: Pattern,
     pub node: Node<'tree>,
     pub capture: Capture,
+    pub scope: Scope,
 }
 
 struct LayerQueryIter<'a, 'tree> {
     cursor: Option<QueryCursor<'a, 'tree, RopeInput<'a>>>,
     peeked: Option<MatchedNode<'tree>>,
+    language: Language,
+    scope_cursor: ScopeCursor<'tree>,
 }
 
-impl<'tree> LayerQueryIter<'_, 'tree> {
-    fn peek(&mut self) -> Option<&MatchedNode<'tree>> {
+impl<'a, 'tree> LayerQueryIter<'a, 'tree> {
+    fn peek<Loader: QueryLoader<'a>>(
+        &mut self,
+        source: RopeSlice<'_>,
+        loader: &Loader,
+    ) -> Option<&MatchedNode<'tree>> {
         if self.peeked.is_none() {
-            let (query_match, node_idx) = self.cursor.as_mut()?.next_matched_node()?;
-            let match_id = query_match.id();
-            let pattern = query_match.pattern();
-            let node = query_match.matched_node(node_idx);
-            self.peeked = Some(MatchedNode {
-                match_id,
-                pattern,
-                // NOTE: `Node` is cheap to clone, it's essentially Copy.
-                node: node.node.clone(),
-                capture: node.capture,
-            });
+            loop {
+                let (query_match, node_idx) = self.cursor.as_mut()?.next_matched_node()?;
+                let node = query_match.matched_node(node_idx);
+                let match_id = query_match.id();
+                let pattern = query_match.pattern();
+                let range = node.node.byte_range();
+                let scope = self.scope_cursor.advance(range.start);
+
+                if !loader.are_predicates_satisfied(
+                    self.language,
+                    &query_match,
+                    source,
+                    &self.scope_cursor,
+                ) {
+                    query_match.remove();
+                    continue;
+                }
+
+                self.peeked = Some(MatchedNode {
+                    match_id,
+                    pattern,
+                    // NOTE: `Node` is cheap to clone, it's essentially Copy.
+                    node: node.node.clone(),
+                    capture: node.capture,
+                    scope,
+                });
+                break;
+            }
         }
         self.peeked.as_ref()
     }
@@ -92,8 +121,10 @@ where
                 Box::new(ActiveLayer {
                     state: (self.init_layer_state_fn)(self.syntax, &injection),
                     query_iter: LayerQueryIter {
+                        language: layer.language,
                         cursor,
                         peeked: None,
+                        scope_cursor: layer.locals.scope_cursor(self.range.start),
                     },
                     injections: layer.injections[injection_start..].iter().peekable(),
                 })
@@ -247,9 +278,13 @@ where
                 .injections
                 .peek()
                 .filter(|injection| injection.range.start <= self.current_injection.range.end);
-            let next_match = self.current_layer.query_iter.peek().filter(|matched_node| {
-                matched_node.node.start_byte() <= self.current_injection.range.end
-            });
+            let next_match = self
+                .current_layer
+                .query_iter
+                .peek(self.layer_manager.src, &self.layer_manager.loader)
+                .filter(|matched_node| {
+                    matched_node.node.start_byte() <= self.current_injection.range.end
+                });
 
             match (next_match, next_injection) {
                 (None, None) => {
@@ -311,6 +346,16 @@ impl<S> QueryIterEvent<'_, S> {
 
 pub trait QueryLoader<'a> {
     fn get_query(&mut self, lang: Language) -> Option<&'a Query>;
+
+    fn are_predicates_satisfied(
+        &self,
+        _lang: Language,
+        _match: &QueryMatch<'_, '_>,
+        _source: RopeSlice<'_>,
+        _locals_cursor: &ScopeCursor<'_>,
+    ) -> bool {
+        true
+    }
 }
 
 impl<'a, F> QueryLoader<'a> for F
