@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::config::{LanguageConfig, LanguageLoader};
 use crate::locals::ScopeCursor;
 use crate::query_iter::{MatchedNode, QueryIter, QueryIterEvent, QueryLoader};
-use crate::{Injection, Language, Layer, Syntax};
+use crate::{Language, Layer, Syntax};
 use arc_swap::ArcSwap;
 use hashbrown::HashSet;
 use ropey::RopeSlice;
@@ -136,19 +136,10 @@ struct HighlightedNode {
     highlight: Highlight,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LayerData {
     parent_highlights: usize,
     dormant_highlights: Vec<HighlightedNode>,
-}
-
-impl LayerData {
-    fn new(_syntax: &Syntax, _injection: &Injection) -> Self {
-        Self {
-            parent_highlights: Default::default(),
-            dormant_highlights: Default::default(),
-        }
-    }
 }
 
 pub struct Highlighter<'a, 'tree, Loader: LanguageLoader> {
@@ -197,13 +188,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
         loader: &'a Loader,
         range: impl RangeBounds<u32>,
     ) -> Self {
-        let mut query = QueryIter::new(
-            syntax,
-            src,
-            HighlightQueryLoader(loader),
-            LayerData::new,
-            range,
-        );
+        let mut query = QueryIter::new(syntax, src, HighlightQueryLoader(loader), range);
         let active_language = query.current_language();
         let mut res = Highlighter {
             active_config: query.loader().0.get_config(active_language),

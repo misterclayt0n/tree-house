@@ -332,7 +332,7 @@ pub fn injections_fixture(
     let lang = syntax.layer(syntax.root).language;
     let language_config = loader.get_config(lang).unwrap();
     let query = Query::new(language_config.grammar, "", "", |_, _| unreachable!()).unwrap();
-    let mut query_iter = QueryIter::new(syntax, src, |_| Some(&query), |_, _| (), start as u32..);
+    let mut query_iter = QueryIter::<_, ()>::new(syntax, src, |_| Some(&query), start as u32..);
     let event = query_iter.next();
     let mut injection_stack = Vec::new();
     let mut pos = if let Some(QueryIterEvent::EnterInjection(injection)) = event {
