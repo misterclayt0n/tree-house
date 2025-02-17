@@ -207,13 +207,10 @@ pub fn highlighter_fixture(
     }
     let mut errors = String::new();
     while pos < end as u32 {
-        let new_highlights = match highlighter.advance() {
-            HighlightEvent::RefreshHighlights(highlights) => {
-                highlight_stack.clear();
-                highlights
-            }
-            HighlightEvent::PushHighlights(highlights) => highlights,
-        };
+        let (event, new_highlights) = highlighter.advance();
+        if event == HighlightEvent::Refresh {
+            highlight_stack.clear();
+        }
         highlight_stack.extend(new_highlights.map(&get_highlight_name));
         let mut start = pos;
         pos = highlighter.next_event_offset();

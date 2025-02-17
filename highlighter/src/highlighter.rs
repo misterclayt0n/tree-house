@@ -176,9 +176,12 @@ impl DoubleEndedIterator for HighlightList<'_> {
     }
 }
 
-pub enum HighlightEvent<'a> {
-    RefreshHighlights(HighlightList<'a>),
-    PushHighlights(HighlightList<'a>),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HighlightEvent {
+    /// Reset the active set of highlights to the given ones.
+    Refresh,
+    /// Add more highlights which build on the existing highlights.
+    Push,
 }
 
 impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
@@ -211,7 +214,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
         self.next_highlight_start.min(self.next_highlight_end)
     }
 
-    pub fn advance(&mut self) -> HighlightEvent<'_> {
+    pub fn advance(&mut self) -> (HighlightEvent, HighlightList<'_>) {
         let mut refresh = false;
         let prev_stack_size = self.active_highlights.len();
 
@@ -248,11 +251,15 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
             .map_or(u32::MAX, |node| node.end);
 
         if refresh {
-            HighlightEvent::RefreshHighlights(HighlightList(self.active_highlights.iter()))
+            (
+                HighlightEvent::Refresh,
+                HighlightList(self.active_highlights.iter()),
+            )
         } else {
-            HighlightEvent::PushHighlights(HighlightList(
-                self.active_highlights[prev_stack_size..].iter(),
-            ))
+            (
+                HighlightEvent::Push,
+                HighlightList(self.active_highlights[prev_stack_size..].iter()),
+            )
         }
     }
 
