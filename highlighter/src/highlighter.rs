@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::mem::replace;
+use std::num::NonZeroU32;
 use std::ops::RangeBounds;
 use std::path::Path;
 use std::slice;
@@ -24,7 +25,7 @@ use tree_sitter::{Pattern, QueryMatch};
 #[derive(Debug)]
 pub struct HighlightQuery {
     pub query: Query,
-    highlight_indices: ArcSwap<Vec<Highlight>>,
+    highlight_indices: ArcSwap<Vec<Option<Highlight>>>,
     #[allow(dead_code)]
     /// Patterns that do not match when the node is a local.
     non_local_patterns: HashSet<Pattern>,
@@ -86,10 +87,7 @@ impl HighlightQuery {
         }
 
         Ok(Self {
-            highlight_indices: ArcSwap::from_pointee(vec![
-                Highlight::NONE;
-                query.num_captures() as usize
-            ]),
+            highlight_indices: ArcSwap::from_pointee(vec![None; query.num_captures() as usize]),
             non_local_patterns,
             local_reference_capture: query.get_capture("local.reference"),
             query,
@@ -112,7 +110,7 @@ impl HighlightQuery {
     /// When highlighting, results are returned as `Highlight` values, configured by this function.
     /// The meaning of these indices is up to the user of the implementation. The highlighter
     /// treats the indices as entirely opaque.
-    pub(crate) fn configure(&self, f: &mut impl FnMut(&str) -> Highlight) {
+    pub(crate) fn configure(&self, f: &mut impl FnMut(&str) -> Option<Highlight>) {
         let highlight_indices = self
             .query
             .captures()
@@ -123,11 +121,26 @@ impl HighlightQuery {
 }
 
 /// Indicates which highlight should be applied to a region of source code.
+///
+/// This type is represented as a non-max u32 - a u32 which cannot be `u32::MAX`. This is checked
+/// at runtime with assertions in `Highlight::new`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct Highlight(pub u32);
+pub struct Highlight(NonZeroU32);
 
 impl Highlight {
-    pub const NONE: Highlight = Highlight(u32::MAX);
+    pub const fn new(inner: u32) -> Self {
+        assert!(inner != u32::MAX);
+        // SAFETY: must be non-zero because `inner` is not `u32::MAX`.
+        Self(unsafe { NonZeroU32::new_unchecked(inner ^ u32::MAX) })
+    }
+
+    const fn get(&self) -> u32 {
+        self.0.get() ^ u32::MAX
+    }
+
+    pub const fn idx(&self) -> usize {
+        self.get() as usize
+    }
 }
 
 #[derive(Debug)]
@@ -340,7 +353,6 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                 .load()
                 .get(&capture)
                 .copied()
-                .unwrap_or(Highlight::NONE)
         } else {
             config.highlight_query.highlight_indices.load()[node.capture.idx()]
         };
@@ -355,7 +367,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
         {
             self.active_highlights.pop();
         }
-        if highlight != Highlight::NONE {
+        if let Some(highlight) = highlight {
             self.active_highlights.push(HighlightedNode {
                 end: range.end,
                 highlight,

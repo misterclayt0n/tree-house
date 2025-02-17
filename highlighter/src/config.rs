@@ -51,7 +51,7 @@ impl LanguageConfig {
         })
     }
 
-    pub fn configure(&self, mut f: impl FnMut(&str) -> Highlight) {
+    pub fn configure(&self, mut f: impl FnMut(&str) -> Option<Highlight>) {
         self.highlight_query.configure(&mut f);
         self.injection_query.configure(&mut f);
     }

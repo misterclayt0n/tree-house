@@ -179,7 +179,9 @@ impl LanguageLoader for TestLanguageLoader {
                 &self.overwrites[lang.idx()],
             );
             let mut theme = self.test_theme.borrow_mut();
-            config.configure(|scope| Highlight(theme.insert_full(scope.to_owned()).0 as u32));
+            config.configure(|scope| {
+                Some(Highlight::new(theme.insert_full(scope.to_owned()).0 as u32))
+            });
             config
         });
         Some(config)
@@ -206,7 +208,7 @@ fn highlight_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
         "// ",
         lang,
         loader,
-        |highlight| loader.test_theme.borrow()[highlight.0 as usize].clone(),
+        |highlight| loader.test_theme.borrow()[highlight.idx()].clone(),
         |_| ..,
     )
 }

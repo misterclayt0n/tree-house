@@ -196,13 +196,13 @@ impl InjectionsQuery {
         })
     }
 
-    pub(crate) fn configure(&self, f: &mut impl FnMut(&str) -> Highlight) {
+    pub(crate) fn configure(&self, f: &mut impl FnMut(&str) -> Option<Highlight>) {
         let local_definition_captures = self
             .local_query
             .captures()
             .filter_map(|(capture, name)| {
                 let suffix = name.strip_prefix("local.definition.")?;
-                Some((capture, f(suffix)))
+                Some((capture, f(suffix)?))
             })
             .collect();
         self.local_definition_captures
