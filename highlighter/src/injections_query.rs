@@ -570,7 +570,6 @@ impl Syntax {
                 let layer_data = self.layer_mut(old_injection.layer);
                 debug_assert_eq!(layer_data.parent, Some(parent));
                 layer_data.flags.reused = true;
-                layer_data.flags.modified = true;
                 layer_data.ranges.clear();
                 old_injection.layer
             }
