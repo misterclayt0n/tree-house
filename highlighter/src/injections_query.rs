@@ -601,12 +601,21 @@ impl Syntax {
                 break;
             }
         }
-        let injection = injections.next_if(|injection| {
-            injection.range.start < new_range.end
-                && self.layer(injection.layer).language == language
-                && !self.layer(injection.layer).flags.reused
-        })?;
-        Some(injection.clone())
+        let mut reused_injection = injections
+            .next_if(|injection| {
+                injection.range.start < new_range.end
+                    && self.layer(injection.layer).language == language
+                    && !self.layer(injection.layer).flags.reused
+            })?
+            .clone();
+
+        // Merge adjacent injections which were split by `intersect_ranges`.
+        while let Some(adjacent) = injections.next_if(|injection| {
+            injection.range.start < new_range.end && injection.layer == reused_injection.layer
+        }) {
+            reused_injection.range.end = adjacent.range.end;
+        }
+        Some(reused_injection)
     }
 }
 
