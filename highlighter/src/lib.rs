@@ -180,7 +180,8 @@ impl Syntax {
             let Some(start_injection) = layer.injection_at_byte_idx(start) else {
                 break;
             };
-            let Some(end_injection) = layer.injection_at_byte_idx(end) else {
+            // +1 because the end is exclusive.
+            let Some(end_injection) = layer.injection_at_byte_idx(end + 1) else {
                 break;
             };
             if start_injection.layer == end_injection.layer {
