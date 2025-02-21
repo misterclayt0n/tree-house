@@ -1,6 +1,5 @@
 use std::fmt::{self, Display};
 use std::ops::Range;
-use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::{slice, str};
 
@@ -84,7 +83,6 @@ impl Query {
     pub fn new(
         grammar: Grammar,
         source: &str,
-        path: impl AsRef<Path>,
         mut custom_predicate: impl FnMut(Pattern, UserPredicate) -> Result<(), InvalidPredicateError>,
     ) -> Result<Self, ParseError> {
         assert!(
@@ -119,48 +117,30 @@ impl Query {
                 RawQueryError::NodeType => {
                     let node: String = error_word();
                     ParseError::InvalidNodeType {
-                        location: ParserErrorLocation::new(
-                            source,
-                            path.as_ref(),
-                            offset,
-                            node.chars().count(),
-                        ),
+                        location: ParserErrorLocation::new(source, offset, node.chars().count()),
                         node,
                     }
                 }
                 RawQueryError::Field => {
                     let field = error_word();
                     ParseError::InvalidFieldName {
-                        location: ParserErrorLocation::new(
-                            source,
-                            path.as_ref(),
-                            offset,
-                            field.chars().count(),
-                        ),
+                        location: ParserErrorLocation::new(source, offset, field.chars().count()),
                         field,
                     }
                 }
                 RawQueryError::Capture => {
                     let capture = error_word();
                     ParseError::InvalidCaptureName {
-                        location: ParserErrorLocation::new(
-                            source,
-                            path.as_ref(),
-                            offset,
-                            capture.chars().count(),
-                        ),
+                        location: ParserErrorLocation::new(source, offset, capture.chars().count()),
                         capture,
                     }
                 }
-                RawQueryError::Syntax => ParseError::SyntaxError(ParserErrorLocation::new(
-                    source,
-                    path.as_ref(),
-                    offset,
-                    0,
-                )),
-                RawQueryError::Structure => ParseError::ImpossiblePattern(
-                    ParserErrorLocation::new(source, path.as_ref(), offset, 0),
-                ),
+                RawQueryError::Syntax => {
+                    ParseError::SyntaxError(ParserErrorLocation::new(source, offset, 0))
+                }
+                RawQueryError::Structure => {
+                    ParseError::ImpossiblePattern(ParserErrorLocation::new(source, offset, 0))
+                }
                 RawQueryError::None => {
                     unreachable!("tree-sitter returned a null pointer but did not set an error")
                 }
@@ -190,7 +170,6 @@ impl Query {
                         message: err.msg.into(),
                         location: ParserErrorLocation::new(
                             source,
-                            path.as_ref(),
                             unsafe { ts_query_start_byte_for_pattern(query.raw, pattern) as usize },
                             0,
                         ),
@@ -326,7 +305,6 @@ impl QueryStr {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ParserErrorLocation {
-    pub path: PathBuf,
     /// at which line the error occurred
     pub line: u32,
     /// at which codepoints/columns the errors starts in the line
@@ -337,7 +315,7 @@ pub struct ParserErrorLocation {
 }
 
 impl ParserErrorLocation {
-    pub fn new(source: &str, path: &Path, offset: usize, len: usize) -> ParserErrorLocation {
+    pub fn new(source: &str, offset: usize, len: usize) -> ParserErrorLocation {
         let (line, line_content) = source[..offset]
             .split('\n')
             .map(|line| line.strip_suffix('\r').unwrap_or(line))
@@ -346,7 +324,6 @@ impl ParserErrorLocation {
             .unwrap_or((0, ""));
         let column = line_content.chars().count();
         ParserErrorLocation {
-            path: path.to_owned(),
             line: line as u32,
             column: column as u32,
             len: len as u32,
@@ -357,13 +334,7 @@ impl ParserErrorLocation {
 
 impl Display for ParserErrorLocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(
-            f,
-            "  --> {}:{}:{}",
-            self.path.display(),
-            self.line,
-            self.column
-        )?;
+        writeln!(f, "  --> {}:{}", self.line, self.column)?;
         let line = self.line.to_string();
         let prefix = format!(" {:width$} |", "", width = line.len());
         writeln!(f, "{prefix}")?;

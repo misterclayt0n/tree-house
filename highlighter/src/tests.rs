@@ -68,17 +68,14 @@ fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
                 })
                 .unwrap()
         }),
-        &highlights_query_path,
         &overwrites
             .injections
             .clone()
             .unwrap_or_else(|| fs::read_to_string(&injections_query_path).unwrap_or_default()),
-        &injections_query_path,
         &overwrites
             .locals
             .clone()
             .unwrap_or_else(|| fs::read_to_string(&locals_query_path).unwrap_or_default()),
-        &locals_query_path,
     )
     .unwrap()
 }

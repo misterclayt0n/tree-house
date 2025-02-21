@@ -7,7 +7,6 @@ use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
 use crate::Language;
 
 use std::fmt::Write;
-use std::path::Path;
 
 #[derive(Debug)]
 pub struct LanguageConfig {
@@ -20,29 +19,15 @@ impl LanguageConfig {
     pub fn new(
         grammar: Grammar,
         highlight_query_text: &str,
-        // TODO: consider dropping the path parameters.
-        highlight_query_path: impl AsRef<Path>,
         injection_query_text: &str,
-        injection_query_path: impl AsRef<Path>,
         local_query_text: &str,
-        local_query_path: impl AsRef<Path>,
     ) -> Result<Self, query::ParseError> {
         // NOTE: the injection queries are parsed first since the local query is passed as-is
         // to `Query::new` in `InjectionsQuery::new`. This ensures that the more readable error
         // bubbles up first if the locals queries have an issue.
-        let injection_query = InjectionsQuery::new(
-            grammar,
-            injection_query_text,
-            injection_query_path,
-            local_query_text,
-            local_query_path,
-        )?;
-        let highlight_query = HighlightQuery::new(
-            grammar,
-            highlight_query_text,
-            highlight_query_path,
-            local_query_text,
-        )?;
+        let injection_query =
+            InjectionsQuery::new(grammar, injection_query_text, local_query_text)?;
+        let highlight_query = HighlightQuery::new(grammar, highlight_query_text, local_query_text)?;
 
         Ok(Self {
             grammar,

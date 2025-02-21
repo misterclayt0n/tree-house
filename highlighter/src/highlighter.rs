@@ -2,7 +2,6 @@ use std::borrow::Cow;
 use std::mem::replace;
 use std::num::NonZeroU32;
 use std::ops::RangeBounds;
-use std::path::Path;
 use std::slice;
 use std::sync::Arc;
 
@@ -36,7 +35,6 @@ impl HighlightQuery {
     pub(crate) fn new(
         grammar: Grammar,
         highlight_query_text: &str,
-        highlight_query_path: impl AsRef<Path>,
         local_query_text: &str,
     ) -> Result<Self, query::ParseError> {
         // Concatenate the highlights and locals queries.
@@ -46,33 +44,28 @@ impl HighlightQuery {
         query_source.push_str(local_query_text);
 
         let mut non_local_patterns = HashSet::new();
-        let mut query = Query::new(
-            grammar,
-            &query_source,
-            highlight_query_path,
-            |pattern, predicate| {
-                match predicate {
-                    // Allow the `(#set! local.scope-inherits <bool>)` property to be parsed.
-                    // This information is not used by this query though, it's used in the
-                    // injection query instead.
-                    UserPredicate::SetProperty {
-                        key: "local.scope-inherits",
-                        ..
-                    } => (),
-                    // TODO: `(#is(-not)? local)` applies to the entire pattern. Ideally you
-                    // should be able to supply capture(s?) which are each checked.
-                    UserPredicate::IsPropertySet {
-                        negate: true,
-                        key: "local",
-                        val: None,
-                    } => {
-                        non_local_patterns.insert(pattern);
-                    }
-                    _ => return Err(format!("unsupported predicate {predicate}").into()),
+        let mut query = Query::new(grammar, &query_source, |pattern, predicate| {
+            match predicate {
+                // Allow the `(#set! local.scope-inherits <bool>)` property to be parsed.
+                // This information is not used by this query though, it's used in the
+                // injection query instead.
+                UserPredicate::SetProperty {
+                    key: "local.scope-inherits",
+                    ..
+                } => (),
+                // TODO: `(#is(-not)? local)` applies to the entire pattern. Ideally you
+                // should be able to supply capture(s?) which are each checked.
+                UserPredicate::IsPropertySet {
+                    negate: true,
+                    key: "local",
+                    val: None,
+                } => {
+                    non_local_patterns.insert(pattern);
                 }
-                Ok(())
-            },
-        )?;
+                _ => return Err(format!("unsupported predicate {predicate}").into()),
+            }
+            Ok(())
+        })?;
 
         // The highlight query only cares about local.reference captures. All scope and definition
         // captures can be disabled.

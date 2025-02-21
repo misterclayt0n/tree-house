@@ -1,7 +1,6 @@
 use std::cmp::Reverse;
 use std::iter::{self, Peekable};
 use std::mem::take;
-use std::path::Path;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
@@ -102,9 +101,7 @@ impl InjectionsQuery {
     pub fn new(
         grammar: Grammar,
         injection_query_text: &str,
-        injection_query_path: impl AsRef<Path>,
         local_query_text: &str,
-        local_query_path: impl AsRef<Path>,
     ) -> Result<Self, query::ParseError> {
         let mut query_source =
             String::with_capacity(injection_query_text.len() + local_query_text.len());
@@ -113,70 +110,57 @@ impl InjectionsQuery {
 
         let mut injection_properties: HashMap<Pattern, InjectionProperties> = HashMap::new();
         let mut not_scope_inherits = HashSet::new();
-        let injection_query = Query::new(
-            grammar,
-            injection_query_text,
-            injection_query_path,
-            |pattern, predicate| {
-                match predicate {
-                    // injections
-                    UserPredicate::SetProperty {
-                        key: "injection.include-unnamed-children",
-                        val: None,
-                    } => {
-                        injection_properties
-                            .entry(pattern)
-                            .or_default()
-                            .include_children = IncludedChildren::Unnamed
-                    }
-                    UserPredicate::SetProperty {
-                        key: "injection.include-children",
-                        val: None,
-                    } => {
-                        injection_properties
-                            .entry(pattern)
-                            .or_default()
-                            .include_children = IncludedChildren::All
-                    }
-                    UserPredicate::SetProperty {
-                        key: "injection.language",
-                        val: Some(lang),
-                    } => {
-                        injection_properties.entry(pattern).or_default().language =
-                            Some(lang.into())
-                    }
-                    UserPredicate::SetProperty {
-                        key: "injection.combined",
-                        val: None,
-                    } => injection_properties.entry(pattern).or_default().combined = true,
-                    predicate => {
-                        return Err(format!("unsupported predicate {predicate}").into());
+        let injection_query = Query::new(grammar, injection_query_text, |pattern, predicate| {
+            match predicate {
+                // injections
+                UserPredicate::SetProperty {
+                    key: "injection.include-unnamed-children",
+                    val: None,
+                } => {
+                    injection_properties
+                        .entry(pattern)
+                        .or_default()
+                        .include_children = IncludedChildren::Unnamed
+                }
+                UserPredicate::SetProperty {
+                    key: "injection.include-children",
+                    val: None,
+                } => {
+                    injection_properties
+                        .entry(pattern)
+                        .or_default()
+                        .include_children = IncludedChildren::All
+                }
+                UserPredicate::SetProperty {
+                    key: "injection.language",
+                    val: Some(lang),
+                } => injection_properties.entry(pattern).or_default().language = Some(lang.into()),
+                UserPredicate::SetProperty {
+                    key: "injection.combined",
+                    val: None,
+                } => injection_properties.entry(pattern).or_default().combined = true,
+                predicate => {
+                    return Err(format!("unsupported predicate {predicate}").into());
+                }
+            }
+            Ok(())
+        })?;
+        let mut local_query = Query::new(grammar, local_query_text, |pattern, predicate| {
+            match predicate {
+                UserPredicate::SetProperty {
+                    key: "local.scope-inherits",
+                    val,
+                } => {
+                    if val.is_some_and(|val| val != "true") {
+                        not_scope_inherits.insert(pattern);
                     }
                 }
-                Ok(())
-            },
-        )?;
-        let mut local_query = Query::new(
-            grammar,
-            local_query_text,
-            local_query_path,
-            |pattern, predicate| {
-                match predicate {
-                    UserPredicate::SetProperty {
-                        key: "local.scope-inherits",
-                        val,
-                    } => {
-                        if val.is_some_and(|val| val != "true") {
-                            not_scope_inherits.insert(pattern);
-                        }
-                    }
-                    predicate => {
-                        return Err(format!("unsupported predicate {predicate}").into());
-                    }
+                predicate => {
+                    return Err(format!("unsupported predicate {predicate}").into());
                 }
-                Ok(())
-            },
-        )?;
+            }
+            Ok(())
+        })?;
 
         // The injection queries do not track references - these are read by the highlight
         // query instead.
