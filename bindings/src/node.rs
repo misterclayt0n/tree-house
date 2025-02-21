@@ -1,4 +1,5 @@
 use std::ffi::{c_char, c_void, CStr};
+use std::fmt;
 use std::marker::PhantomData;
 use std::ops::Range;
 use std::ptr::NonNull;
@@ -25,13 +26,20 @@ impl From<Node<'_>> for NodeRaw {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct Node<'tree> {
     context: [u32; 4],
     id: NonNull<c_void>,
     tree: NonNull<c_void>,
     _phantom: PhantomData<&'tree Tree>,
+}
+
+impl fmt::Debug for Node<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let range = self.byte_range();
+        write!(f, "{{Node {} {range:?}}}", self.kind())
+    }
 }
 
 impl<'tree> Node<'tree> {
