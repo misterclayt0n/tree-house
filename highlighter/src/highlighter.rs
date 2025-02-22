@@ -13,7 +13,7 @@ use arc_swap::ArcSwap;
 use hashbrown::HashSet;
 use ropey::RopeSlice;
 use tree_sitter::{
-    query::{self, Query, UserPredicate},
+    query::{self, InvalidPredicateError, Query, UserPredicate},
     Capture, Grammar,
 };
 use tree_sitter::{Pattern, QueryMatch};
@@ -62,7 +62,7 @@ impl HighlightQuery {
                 } => {
                     non_local_patterns.insert(pattern);
                 }
-                _ => return Err(format!("unsupported predicate {predicate}").into()),
+                _ => return Err(InvalidPredicateError::unknown(predicate)),
             }
             Ok(())
         })?;

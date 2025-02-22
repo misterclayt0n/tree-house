@@ -14,9 +14,9 @@ use crate::highlighter::Highlight;
 use crate::locals::Locals;
 use crate::parse::LayerUpdateFlags;
 use crate::{Injection, Language, Layer, LayerData, Range, Syntax, TREE_SITTER_MATCH_LIMIT};
-use tree_sitter::query::UserPredicate;
 use tree_sitter::{
-    query, Capture, Grammar, InactiveQueryCursor, MatchedNodeIdx, Node, Pattern, Query, QueryMatch,
+    query::{self, InvalidPredicateError, UserPredicate},
+    Capture, Grammar, InactiveQueryCursor, MatchedNodeIdx, Node, Pattern, Query, QueryMatch,
 };
 
 const SHEBANG: &str = r"#!\s*(?:\S*[/\\](?:env\s+(?:\-\S+\s+)*)?)?([^\s\.\d]+)";
@@ -140,7 +140,7 @@ impl InjectionsQuery {
                     val: None,
                 } => injection_properties.entry(pattern).or_default().combined = true,
                 predicate => {
-                    return Err(format!("unsupported predicate {predicate}").into());
+                    return Err(InvalidPredicateError::unknown(predicate));
                 }
             }
             Ok(())
@@ -156,7 +156,7 @@ impl InjectionsQuery {
                     }
                 }
                 predicate => {
-                    return Err(format!("unsupported predicate {predicate}").into());
+                    return Err(InvalidPredicateError::unknown(predicate));
                 }
             }
             Ok(())

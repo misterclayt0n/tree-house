@@ -14,14 +14,14 @@ use regex_cursor::Cursor;
 
 macro_rules! bail {
     ($($args:tt)*) => {{
-        return Err(InvalidPredicateError {msg: format!($($args)*).into() })
+        return Err(InvalidPredicateError::Other {msg: format!($($args)*).into() })
     }}
 }
 
 macro_rules! ensure {
     ($cond: expr, $($args:tt)*) => {{
         if !$cond {
-            return Err(InvalidPredicateError { msg: format!($($args)*).into() })
+            return Err(InvalidPredicateError::Other { msg: format!($($args)*).into() })
         }
     }}
 }
@@ -346,13 +346,39 @@ impl<'a> Predicate<'a> {
 }
 
 #[derive(Debug)]
-pub struct InvalidPredicateError {
-    pub(super) msg: Box<str>,
+pub enum InvalidPredicateError {
+    /// The property specified in `#set! <prop>` is not known.
+    UnknownProperty {
+        property: Box<str>,
+    },
+    /// Predicate is unknown/unsupported by this query.
+    UnknownPredicate {
+        name: Box<str>,
+    },
+    Other {
+        msg: Box<str>,
+    },
+}
+
+impl InvalidPredicateError {
+    pub fn unknown(predicate: UserPredicate) -> Self {
+        match predicate {
+            UserPredicate::IsPropertySet { key, .. } => Self::UnknownProperty {
+                property: key.into(),
+            },
+            UserPredicate::SetProperty { key, .. } => Self::UnknownProperty {
+                property: key.into(),
+            },
+            UserPredicate::Other(predicate) => Self::UnknownPredicate {
+                name: predicate.name().into(),
+            },
+        }
+    }
 }
 
 impl From<String> for InvalidPredicateError {
     fn from(value: String) -> Self {
-        InvalidPredicateError {
+        InvalidPredicateError::Other {
             msg: value.into_boxed_str(),
         }
     }
@@ -360,13 +386,17 @@ impl From<String> for InvalidPredicateError {
 
 impl<'a> From<&'a str> for InvalidPredicateError {
     fn from(value: &'a str) -> Self {
-        InvalidPredicateError { msg: value.into() }
+        InvalidPredicateError::Other { msg: value.into() }
     }
 }
 
 impl fmt::Display for InvalidPredicateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.msg)
+        match self {
+            Self::UnknownProperty { property } => write!(f, "unknown property '{property}'"),
+            Self::UnknownPredicate { name } => write!(f, "unknown predicate #{name}"),
+            Self::Other { msg } => f.write_str(msg),
+        }
     }
 }
 

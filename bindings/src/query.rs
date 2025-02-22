@@ -37,7 +37,7 @@ impl Display for UserPredicate<'_> {
                 write!(f, "(#set! {key}{spacer}{})", val.unwrap_or(""))
             }
             UserPredicate::Other(ref predicate) => {
-                write!(f, "{}", predicate.name())
+                write!(f, "#{}", predicate.name())
             }
         }
     }
@@ -166,13 +166,48 @@ impl Query {
             .map(|pattern| {
                 query
                     .parse_pattern_predicates(Pattern(pattern), &mut custom_predicate)
-                    .map_err(|err| ParseError::InvalidPredicate {
-                        message: err.msg.into(),
-                        location: ParserErrorLocation::new(
-                            source,
-                            unsafe { ts_query_start_byte_for_pattern(query.raw, pattern) as usize },
-                            0,
-                        ),
+                    .map_err(|err| {
+                        let pattern_start =
+                            unsafe { ts_query_start_byte_for_pattern(query.raw, pattern) as usize };
+                        match err {
+                            InvalidPredicateError::UnknownPredicate { name } => {
+                                let offset = source[pattern_start..]
+                                    .find(&*name)
+                                    .expect("predicate name is a substring of the query text")
+                                    + pattern_start
+                                    // Subtract a byte for b'#'.
+                                    - 1;
+                                ParseError::InvalidPredicate {
+                                    message: format!("unknown predicate #{name}"),
+                                    location: ParserErrorLocation::new(
+                                        source,
+                                        offset,
+                                        // Add one char for the '#'.
+                                        name.chars().count() + 1,
+                                    ),
+                                }
+                            }
+                            InvalidPredicateError::UnknownProperty { property } => {
+                                // TODO: this is naive. We should ensure that it is within a
+                                // `#set!` or `#is(-not)?`.
+                                let offset = source[pattern_start..]
+                                    .find(&*property)
+                                    .expect("property name is a substring of the query text")
+                                    + pattern_start;
+                                ParseError::InvalidPredicate {
+                                    message: format!("unknown property '{property}'"),
+                                    location: ParserErrorLocation::new(
+                                        source,
+                                        offset,
+                                        property.chars().count(),
+                                    ),
+                                }
+                            }
+                            InvalidPredicateError::Other { msg } => ParseError::InvalidPredicate {
+                                message: msg.into(),
+                                location: ParserErrorLocation::new(source, pattern_start, 0),
+                            },
+                        }
                     })
             })
             .collect();
@@ -312,41 +347,84 @@ pub struct ParserErrorLocation {
     /// how many codepoints/columns the error takes up
     pub len: u32,
     line_content: String,
+    line_before: Option<String>,
+    line_after: Option<String>,
 }
 
 impl ParserErrorLocation {
-    pub fn new(source: &str, offset: usize, len: usize) -> ParserErrorLocation {
-        let (line, line_content) = source[..offset]
-            .split('\n')
-            .map(|line| line.strip_suffix('\r').unwrap_or(line))
-            .enumerate()
-            .last()
-            .unwrap_or((0, ""));
-        let column = line_content.chars().count();
+    pub fn new(source: &str, start: usize, len: usize) -> ParserErrorLocation {
+        let mut line = 0;
+        let mut column = 0;
+        let mut line_content = String::new();
+        let mut line_before = None;
+        let mut line_after = None;
+
+        let mut byte_offset = 0;
+        for (this_line_no, this_line) in source.split('\n').enumerate() {
+            let line_start = byte_offset;
+            let line_end = line_start + this_line.len();
+            if line_start <= start && start <= line_end {
+                line = this_line_no;
+                line_content = this_line
+                    .strip_suffix('\r')
+                    .unwrap_or(this_line)
+                    .to_string();
+                column = source[line_start..start].chars().count();
+                line_before = source[..line_start]
+                    .lines()
+                    .next_back()
+                    .filter(|s| !s.is_empty())
+                    .map(ToOwned::to_owned);
+                line_after = source[line_end + 1..]
+                    .lines()
+                    .next()
+                    .filter(|s| !s.is_empty())
+                    .map(ToOwned::to_owned);
+                break;
+            }
+            byte_offset += this_line.len() + 1;
+        }
+
         ParserErrorLocation {
             line: line as u32,
             column: column as u32,
             len: len as u32,
             line_content: line_content.to_owned(),
+            line_before,
+            line_after,
         }
     }
 }
 
 impl Display for ParserErrorLocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "  --> {}:{}", self.line, self.column)?;
-        let line = self.line.to_string();
-        let prefix = format!(" {:width$} |", "", width = line.len());
+        writeln!(f, "  --> {}:{}", self.line + 1, self.column + 1)?;
+
+        let max_line_number = if self.line_after.is_some() {
+            self.line + 2
+        } else {
+            self.line + 1
+        };
+        let line_number_column_len = max_line_number.to_string().len();
+        let line = (self.line + 1).to_string();
+        let prefix = format!(" {:width$} |", "", width = line_number_column_len);
+
         writeln!(f, "{prefix}")?;
+        if let Some(before) = self.line_before.as_ref() {
+            writeln!(f, " {} | {}", self.line, before)?;
+        }
         writeln!(f, " {line} | {}", self.line_content)?;
         writeln!(
             f,
-            "{prefix}{:width$}{:^<len$}",
+            "{prefix}{:width$} {:^<len$}",
             "",
             "^",
             width = self.column as usize,
             len = self.len as usize
         )?;
+        if let Some(after) = self.line_after.as_ref() {
+            writeln!(f, " {} | {}", self.line + 2, after)?;
+        }
         writeln!(f, "{prefix}")
     }
 }
