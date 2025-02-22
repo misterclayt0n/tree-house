@@ -59,7 +59,7 @@ unsafe impl Send for Tree {}
 unsafe impl Sync for Tree {}
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct InputEdit {
     pub start_byte: u32,
     pub old_end_byte: u32,
