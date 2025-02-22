@@ -103,10 +103,23 @@ impl<'tree> Node<'tree> {
     pub fn is_missing(&self) -> bool {
         unsafe { ts_node_is_missing(self.as_raw()) }
     }
+
     /// Get the byte offsets where this node starts.
-    #[inline]
+    #[inline(always)]
     pub fn start_byte(&self) -> u32 {
-        unsafe { ts_node_start_byte(self.as_raw()) }
+        // Normally we would implement this method like so:
+        //
+        //     extern "C" {
+        //         /// Get the node's start byte.
+        //         fn ts_node_start_byte(self_: NodeRaw) -> u32;
+        //     }
+        //     unsafe { ts_node_start_byte(self.as_raw()) }
+        //
+        // However this method has a trivial implementation which is unlikely to change (though
+        // there is no guarantee) and this method can be called often, in tight loops, on a hot
+        // code path (for example the highlighter's `next_event_offset` method). So we inline the
+        // implementation directly from `node.c` in the C library to minimize overhead:
+        self.context[0]
     }
 
     /// Get the byte offsets where this node end.
@@ -116,7 +129,6 @@ impl<'tree> Node<'tree> {
     }
 
     /// Get the byte range of source code that this node represents.
-    // TODO: use helix_stdx::Range once available
     #[inline]
     pub fn byte_range(&self) -> Range<u32> {
         self.start_byte()..self.end_byte()
@@ -210,6 +222,7 @@ impl<'tree> Node<'tree> {
             ))
         }
     }
+
     /// Iterate over this node's children.
     ///
     /// A [`TreeCursor`] is used to retrieve the children efficiently. Obtain
@@ -298,9 +311,6 @@ extern "C" {
     /// Get the smallest named node within this node that spans the given range
     /// of bytes or (row, column) positions
     fn ts_node_named_descendant_for_byte_range(node: NodeRaw, start: u32, end: u32) -> NodeRaw;
-
-    /// Get the node's start byte.
-    fn ts_node_start_byte(self_: NodeRaw) -> u32;
 
     /// Get the node's end byte.
     fn ts_node_end_byte(node: NodeRaw) -> u32;
