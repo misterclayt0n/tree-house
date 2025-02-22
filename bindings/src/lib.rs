@@ -13,7 +13,7 @@ pub use ropey::RopeInput;
 
 use std::ops;
 
-pub use grammar::Grammar;
+pub use grammar::{Grammar, IncompatibleGrammarError};
 pub use node::Node;
 pub use parser::{Parser, ParserInputRaw};
 pub use query::{Capture, Pattern, Query, QueryStr};

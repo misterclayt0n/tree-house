@@ -183,7 +183,9 @@ impl LayerData {
         let Some(config) = loader.get_config(self.language) else {
             return Ok(());
         };
-        parser.set_grammar(config.grammar);
+        if let Err(err) = parser.set_grammar(config.grammar) {
+            return Err(Error::IncompatibleGrammar(self.language, err));
+        }
         parser
             .set_included_ranges(&self.ranges)
             .map_err(|_| Error::InvalidRanges)?;

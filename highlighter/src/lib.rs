@@ -6,7 +6,7 @@ use slab::Slab;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
-use tree_sitter::{Node, Tree};
+use tree_sitter::{IncompatibleGrammarError, Node, Tree};
 
 pub use crate::config::{read_query, LanguageConfig, LanguageLoader};
 pub use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
@@ -277,6 +277,7 @@ pub enum Error {
     InvalidRanges,
     Unknown,
     NoRootConfig,
+    IncompatibleGrammar(Language, IncompatibleGrammarError),
 }
 
 impl fmt::Display for Error {
@@ -289,6 +290,12 @@ impl fmt::Display for Error {
             Self::NoRootConfig => f.write_str(
                 "`LanguageLoader::get_config` for the root layer language returned `None`",
             ),
+            Self::IncompatibleGrammar(language, IncompatibleGrammarError { abi_version }) => {
+                write!(
+                    f,
+                    "failed to load grammar for language {language:?} with ABI version {abi_version}"
+                )
+            }
         }
     }
 }

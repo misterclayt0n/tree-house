@@ -7,6 +7,7 @@ use std::{fmt, mem, ptr};
 
 use regex_cursor::Cursor;
 
+use crate::grammar::IncompatibleGrammarError;
 use crate::tree::{SyntaxTreeData, Tree};
 use crate::{Grammar, Input, IntoInput, Point, Range};
 
@@ -51,8 +52,14 @@ impl Parser {
     }
 
     /// Set the language that the parser should use for parsing.
-    pub fn set_grammar(&mut self, grammar: Grammar) {
-        unsafe { ts_parser_set_language(self.ptr, grammar) };
+    pub fn set_grammar(&mut self, grammar: Grammar) -> Result<(), IncompatibleGrammarError> {
+        if unsafe { ts_parser_set_language(self.ptr, grammar) } {
+            Ok(())
+        } else {
+            Err(IncompatibleGrammarError {
+                abi_version: grammar.abi_version(),
+            })
+        }
     }
 
     pub fn set_timeout(&mut self, duration: Duration) {
