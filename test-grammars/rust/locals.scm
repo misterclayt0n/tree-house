@@ -17,14 +17,6 @@
 (parameter
   (identifier) @local.definition.variable.parameter)
 
-; TODO: what to highlight for these?
-; (type_parameters
-;   (type_identifier) @local.definition)
-; (constrained_type_parameter
-;   left: (type_identifier) @local.definition)
-; (optional_type_parameter
-;   name: (type_identifier) @local.definition)
-
 (closure_parameters (identifier) @local.definition.variable.parameter)
 
 ; References
