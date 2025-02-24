@@ -101,9 +101,10 @@ where
             .remove(&injection.layer)
             .unwrap_or_else(|| {
                 let layer = self.syntax.layer(injection.layer);
+                let start_point = injection.range.start.max(self.range.start);
                 let injection_start = layer
                     .injections
-                    .partition_point(|child| child.range.start < injection.range.start);
+                    .partition_point(|child| child.range.start < start_point);
                 let cursor = self
                     .loader
                     .get_query(layer.language)
