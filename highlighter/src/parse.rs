@@ -39,6 +39,10 @@ impl Syntax {
 
         while let Some(layer) = queue.pop() {
             let layer_data = self.layer_mut(layer);
+            if layer_data.ranges.is_empty() {
+                // Skip re-parsing and querying layers without any ranges.
+                continue;
+            }
             if let Some(tree) = &mut layer_data.parse_tree {
                 if layer_data.flags.moved || layer_data.flags.modified {
                     for edit in edits.iter().rev() {
