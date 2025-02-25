@@ -395,7 +395,7 @@ impl Syntax {
 
         let mut combined_injections: HashMap<InjectionScope, Layer> = HashMap::with_capacity(32);
         for mat in injection_query {
-            let range = mat.node.byte_range();
+            let matched_node_range = mat.node.byte_range();
             let mut insert_position = injections.len();
             // if a parent node already has an injection ignore this injection
             // in theory the first condition would be enough to detect that
@@ -409,16 +409,17 @@ impl Syntax {
             // that injections get sorted to the correct position
             if let Some(last_injection) = injections
                 .last()
-                .filter(|injection| injection.range.end >= range.end)
+                .filter(|injection| injection.range.end >= matched_node_range.end)
             {
                 // this condition is not needed but serves as fast path
                 // for common cases
-                if last_injection.range.start <= range.start {
+                if last_injection.range.start <= matched_node_range.start {
                     continue;
                 } else {
-                    insert_position =
-                        injections.partition_point(|injection| injection.range.end <= range.start);
-                    if injections[insert_position].range.start < range.end {
+                    insert_position = injections.partition_point(|injection| {
+                        injection.range.end <= matched_node_range.start
+                    });
+                    if injections[insert_position].range.start < matched_node_range.end {
                         continue;
                     }
                 }
@@ -426,7 +427,7 @@ impl Syntax {
 
             let language = mat.language;
             let reused_injection =
-                self.reuse_injection(language, range.clone(), &mut old_injections);
+                self.reuse_injection(language, matched_node_range.clone(), &mut old_injections);
             let layer = match mat.scope {
                 Some(scope @ InjectionScope::Match { .. }) if mat.last_match => {
                     combined_injections.remove(&scope).unwrap_or_else(|| {
@@ -444,8 +445,8 @@ impl Syntax {
                 parse_layer(layer)
             }
             if layer_data.flags.reused {
-                layer_data.flags.modified |= reused_injection.map_or(true, |injection| {
-                    injection.range != range || injection.layer != layer
+                layer_data.flags.modified |= reused_injection.as_ref().map_or(true, |injection| {
+                    injection.matched_node_range != matched_node_range || injection.layer != layer
                 });
             } else if let Some(reused_injection) = reused_injection {
                 layer_data.flags.reused = true;
@@ -463,7 +464,11 @@ impl Syntax {
                     start_byte: range.start,
                     end_byte: range.end,
                 });
-                injections.push(Injection { range, layer });
+                injections.push(Injection {
+                    range,
+                    layer,
+                    matched_node_range: matched_node_range.clone(),
+                });
             });
             if old_len != insert_position {
                 let inserted = injections.len() - old_len;
@@ -509,36 +514,68 @@ impl Syntax {
         let mut edits = edits.iter().peekable();
         let mut injections = take(&mut layer_data.injections);
         for injection in &mut injections[first_relevant_injection..] {
-            let range = &mut injection.range;
+            let injection_range = &mut injection.range;
+            let matched_node_range = &mut injection.matched_node_range;
             let flags = &mut self.layer_mut(injection.layer).flags;
 
-            while let Some(edit) = edits.next_if(|edit| edit.old_end_byte < range.start) {
+            debug_assert!(matched_node_range.start <= injection_range.start);
+            debug_assert!(matched_node_range.end >= injection_range.end);
+
+            while let Some(edit) =
+                edits.next_if(|edit| edit.old_end_byte < matched_node_range.start)
+            {
+                offset += edit.offset();
+            }
+            let mut mapped_node_range_start = (matched_node_range.start as i32 + offset) as u32;
+            if let Some(edit) = edits
+                .peek()
+                .filter(|edit| edit.start_byte <= matched_node_range.start)
+            {
+                mapped_node_range_start = (edit.new_end_byte as i32 + offset) as u32;
+            }
+            while let Some(edit) = edits.next_if(|edit| edit.old_end_byte < injection_range.start) {
                 offset += edit.offset();
             }
             flags.moved = offset != 0;
-            let mut mapped_start = (range.start as i32 + offset) as u32;
-            if let Some(edit) = edits.next_if(|edit| edit.old_end_byte <= range.end) {
-                if edit.start_byte < range.start {
+            let mut mapped_start = (injection_range.start as i32 + offset) as u32;
+            if let Some(edit) = edits.next_if(|edit| edit.old_end_byte <= injection_range.end) {
+                if edit.start_byte < injection_range.start {
                     flags.moved = true;
                     mapped_start = (edit.new_end_byte as i32 + offset) as u32;
                 } else {
                     flags.modified = true;
                 }
                 offset += edit.offset();
-                while let Some(edit) = edits.next_if(|edit| edit.old_end_byte <= range.end) {
+                while let Some(edit) =
+                    edits.next_if(|edit| edit.old_end_byte <= injection_range.end)
+                {
                     offset += edit.offset();
                 }
             }
-            let mut mapped_end = (range.end as i32 + offset) as u32;
-            if let Some(edit) = edits.peek().filter(|edit| edit.start_byte <= range.end) {
+            let mut mapped_end = (injection_range.end as i32 + offset) as u32;
+            if let Some(edit) = edits
+                .peek()
+                .filter(|edit| edit.start_byte <= injection_range.end)
+            {
                 flags.modified = true;
 
-                if edit.start_byte < range.start {
+                if edit.start_byte < injection_range.start {
                     mapped_start = (edit.new_end_byte as i32 + offset) as u32;
                     mapped_end = mapped_start;
                 }
             }
-            *range = mapped_start..mapped_end;
+            let mut mapped_node_range_end = (matched_node_range.end as i32 + offset) as u32;
+            if let Some(edit) = edits
+                .peek()
+                .filter(|edit| edit.start_byte <= matched_node_range.end)
+            {
+                if edit.start_byte < matched_node_range.start {
+                    mapped_node_range_start = (edit.new_end_byte as i32 + offset) as u32;
+                    mapped_node_range_end = mapped_node_range_start;
+                }
+            }
+            *injection_range = mapped_start..mapped_end;
+            *matched_node_range = mapped_node_range_start..mapped_node_range_end;
         }
         self.layer_mut(layer).injections = injections;
     }
@@ -585,21 +622,13 @@ impl Syntax {
                 break;
             }
         }
-        let mut reused_injection = injections
+        injections
             .next_if(|injection| {
                 injection.range.start < new_range.end
                     && self.layer(injection.layer).language == language
                     && !self.layer(injection.layer).flags.reused
-            })?
-            .clone();
-
-        // Merge adjacent injections which were split by `intersect_ranges`.
-        while let Some(adjacent) = injections.next_if(|injection| {
-            injection.range.start < new_range.end && injection.layer == reused_injection.layer
-        }) {
-            reused_injection.range.end = adjacent.range.end;
-        }
-        Some(reused_injection)
+            })
+            .clone()
     }
 }
 

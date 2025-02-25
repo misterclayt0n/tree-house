@@ -202,6 +202,7 @@ impl Syntax {
 pub struct Injection {
     pub range: Range,
     pub layer: Layer,
+    matched_node_range: Range,
 }
 
 #[derive(Debug)]

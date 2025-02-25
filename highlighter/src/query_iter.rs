@@ -162,6 +162,7 @@ where
         let injection = Injection {
             range: node.byte_range(),
             layer: syntax.root,
+            matched_node_range: node.byte_range(),
         };
         let mut layer_manager = Box::new(QueryIterLayerManager {
             range,
