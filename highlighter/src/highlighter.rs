@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::fmt;
 use std::mem::replace;
 use std::num::NonZeroU32;
 use std::ops::RangeBounds;
@@ -117,7 +118,7 @@ impl HighlightQuery {
 ///
 /// This type is represented as a non-max u32 - a u32 which cannot be `u32::MAX`. This is checked
 /// at runtime with assertions in `Highlight::new`.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Highlight(NonZeroU32);
 
 impl Highlight {
@@ -133,6 +134,12 @@ impl Highlight {
 
     pub const fn idx(&self) -> usize {
         self.get() as usize
+    }
+}
+
+impl fmt::Debug for Highlight {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Highlight").field(&self.get()).finish()
     }
 }
 
