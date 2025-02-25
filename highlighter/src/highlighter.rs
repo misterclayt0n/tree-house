@@ -184,6 +184,12 @@ impl DoubleEndedIterator for HighlightList<'_> {
     }
 }
 
+impl ExactSizeIterator for HighlightList<'_> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HighlightEvent {
     /// Reset the active set of highlights to the given ones.
