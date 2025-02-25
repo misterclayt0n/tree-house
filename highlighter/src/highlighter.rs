@@ -10,7 +10,7 @@ use crate::locals::ScopeCursor;
 use crate::query_iter::{MatchedNode, QueryIter, QueryIterEvent, QueryLoader};
 use crate::{Language, Layer, Syntax};
 use arc_swap::ArcSwap;
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 use ropey::RopeSlice;
 use tree_sitter::{
     query::{self, InvalidPredicateError, Query, UserPredicate},
@@ -149,17 +149,19 @@ pub struct LayerData {
 }
 
 pub struct Highlighter<'a, 'tree, Loader: LanguageLoader> {
-    query: QueryIter<'a, 'tree, HighlightQueryLoader<&'a Loader>, LayerData>,
-    next_query_event: Option<QueryIterEvent<'tree, LayerData>>,
+    query: QueryIter<'a, 'tree, HighlightQueryLoader<&'a Loader>, ()>,
+    next_query_event: Option<QueryIterEvent<'tree, ()>>,
     active_highlights: Vec<HighlightedNode>,
     next_highlight_end: u32,
     next_highlight_start: u32,
     active_config: Option<&'a LanguageConfig>,
-    /// The current injection layer of the query iterator.
-    ///
-    /// We track this in the highlighter (rather than calling `QueryIter::current_layer`) because
-    /// the highlighter peeks events from the QueryIter (see `Self::advance_query_iter`).
+    // The current layer and per-layer state could be tracked on the QueryIter itself (see
+    // `QueryIter::current_layer` and `QueryIter::layer_state`) however the highlighter peeks the
+    // query iter. The query iter is always one event ahead, so it will enter/exit injections
+    // before we get a chance to in the highlighter. So instead we track these on the highlighter.
+    // Also see `Self::advance_query_iter`.
     current_layer: Layer,
+    layer_states: HashMap<Layer, LayerData>,
 }
 
 pub struct HighlightList<'a>(slice::Iter<'a, HighlightedNode>);
@@ -203,6 +205,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
             active_config: query.loader().0.get_config(active_language),
             next_query_event: None,
             current_layer: query.current_layer(),
+            layer_states: Default::default(),
             active_highlights: Vec::new(),
             next_highlight_end: u32::MAX,
             next_highlight_start: 0,
@@ -226,7 +229,6 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
 
         let pos = self.next_event_offset();
         if self.next_highlight_end == pos {
-            // self.process_injection_ends();
             self.process_highlight_end(pos);
             refresh = true;
         }
@@ -237,7 +239,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                 break;
             };
             match query_event {
-                QueryIterEvent::EnterInjection(_) => self.enter_injection(),
+                QueryIterEvent::EnterInjection(injection) => self.enter_injection(injection.layer),
                 QueryIterEvent::Match(node) => self.start_highlight(node, &mut first_highlight),
                 QueryIterEvent::ExitInjection { injection, state } => {
                     // state is returned if the layer is finished, if it isn't we have
@@ -245,8 +247,10 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                     if state.is_none() {
                         self.deactivate_layer(injection.layer);
                         refresh = true;
+                    } else {
+                        self.layer_states.remove(&injection.layer);
                     }
-                    let active_language = self.query.current_language();
+                    let active_language = self.query.syntax().layer(self.current_layer).language;
                     self.active_config = self.query.loader().0.get_config(active_language);
                 }
             }
@@ -269,7 +273,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
         }
     }
 
-    fn advance_query_iter(&mut self) -> Option<QueryIterEvent<'tree, LayerData>> {
+    fn advance_query_iter(&mut self) -> Option<QueryIterEvent<'tree, ()>> {
         // Track the current layer **before** calling `QueryIter::next`. The QueryIter moves
         // to the next event with `QueryIter::next` but we're treating that event as peeked - it
         // hasn't occurred yet - so the current layer is the one the query iter was on _before_
@@ -292,12 +296,14 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
         self.active_highlights.truncate(i);
     }
 
-    fn enter_injection(&mut self) {
-        let active_language = self.query.syntax().layer(self.current_layer).language;
+    fn enter_injection(&mut self, layer: Layer) {
+        debug_assert_eq!(layer, self.current_layer);
+        let active_language = self.query.syntax().layer(layer).language;
         self.active_config = self.query.loader().0.get_config(active_language);
-        let data = self.query.current_injection().1;
-        data.parent_highlights = self.active_highlights.len();
-        self.active_highlights.append(&mut data.dormant_highlights);
+
+        let state = self.layer_states.entry(layer).or_default();
+        state.parent_highlights = self.active_highlights.len();
+        self.active_highlights.append(&mut state.dormant_highlights);
     }
 
     fn deactivate_layer(&mut self, layer: Layer) {
@@ -305,7 +311,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
             mut parent_highlights,
             ref mut dormant_highlights,
             ..
-        } = *self.query.layer_state(layer);
+        } = self.layer_states.get_mut(&layer).unwrap();
         parent_highlights = parent_highlights.min(self.active_highlights.len());
         dormant_highlights.extend(self.active_highlights.drain(parent_highlights..));
         self.process_highlight_end(self.next_highlight_start);

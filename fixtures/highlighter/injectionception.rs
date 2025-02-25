@@ -22,45 +22,45 @@
 // │ ╰─ comment comment
 // ╰─ comment
    /// fn add(left: usize, right: usize) -> usize {
-// ┡┛╿╿┡┛╿┡━┛╿┡━━┛╿╿┡━━━┛╿╿┡━━━┛╿╿┡━━━┛╿╿┡┛╿┡━━━┛╿╿╰─ comment
-// │ │││ ││  ││   │││    │││    │││    │││ ││    │╰─ comment punctuation.bracket
-// │ │││ ││  ││   │││    │││    │││    │││ ││    ╰─ comment
-// │ │││ ││  ││   │││    │││    │││    │││ │╰─ comment type.builtin
-// │ │││ ││  ││   │││    │││    │││    │││ ╰─ comment
-// │ │││ ││  ││   │││    │││    │││    ││╰─ comment operator
-// │ │││ ││  ││   │││    │││    │││    │╰─ comment
-// │ │││ ││  ││   │││    │││    │││    ╰─ comment punctuation.bracket
-// │ │││ ││  ││   │││    │││    ││╰─ comment type.builtin
-// │ │││ ││  ││   │││    │││    │╰─ comment
-// │ │││ ││  ││   │││    │││    ╰─ comment punctuation.delimiter
-// │ │││ ││  ││   │││    ││╰─ comment variable.parameter
-// │ │││ ││  ││   │││    │╰─ comment
-// │ │││ ││  ││   │││    ╰─ comment punctuation.delimiter
-// │ │││ ││  ││   ││╰─ comment type.builtin
-// │ │││ ││  ││   │╰─ comment
-// │ │││ ││  ││   ╰─ comment punctuation.delimiter
-// │ │││ ││  │╰─ comment variable.parameter
-// │ │││ ││  ╰─ comment punctuation.bracket
-// │ │││ │╰─ comment function
-// │ │││ ╰─ comment
-// │ ││╰─ comment keyword.function
-// │ │╰─ comment
+// ┡┛╿╿┡┛╿┡━┛╿┡━━┛╿╿┡━━━┛╿╿┡━━━┛╿╿┡━━━┛╿╿┡┛╿┡━━━┛╿╿╰─ comment markup.raw.block
+// │ │││ ││  ││   │││    │││    │││    │││ ││    │╰─ comment markup.raw.block punctuation.bracket
+// │ │││ ││  ││   │││    │││    │││    │││ ││    ╰─ comment markup.raw.block
+// │ │││ ││  ││   │││    │││    │││    │││ │╰─ comment markup.raw.block type.builtin
+// │ │││ ││  ││   │││    │││    │││    │││ ╰─ comment markup.raw.block
+// │ │││ ││  ││   │││    │││    │││    ││╰─ comment markup.raw.block operator
+// │ │││ ││  ││   │││    │││    │││    │╰─ comment markup.raw.block
+// │ │││ ││  ││   │││    │││    │││    ╰─ comment markup.raw.block punctuation.bracket
+// │ │││ ││  ││   │││    │││    ││╰─ comment markup.raw.block type.builtin
+// │ │││ ││  ││   │││    │││    │╰─ comment markup.raw.block
+// │ │││ ││  ││   │││    │││    ╰─ comment markup.raw.block punctuation.delimiter
+// │ │││ ││  ││   │││    ││╰─ comment markup.raw.block variable.parameter
+// │ │││ ││  ││   │││    │╰─ comment markup.raw.block
+// │ │││ ││  ││   │││    ╰─ comment markup.raw.block punctuation.delimiter
+// │ │││ ││  ││   ││╰─ comment markup.raw.block type.builtin
+// │ │││ ││  ││   │╰─ comment markup.raw.block
+// │ │││ ││  ││   ╰─ comment markup.raw.block punctuation.delimiter
+// │ │││ ││  │╰─ comment markup.raw.block variable.parameter
+// │ │││ ││  ╰─ comment markup.raw.block punctuation.bracket
+// │ │││ │╰─ comment markup.raw.block function
+// │ │││ ╰─ comment markup.raw.block
+// │ ││╰─ comment markup.raw.block keyword.function
+// │ │╰─ comment markup.raw.block
 // │ ╰─ comment comment
 // ╰─ comment
    ///     left + right
-// ┡┛╿┡━━━┛┡━━┛╿╿╿┡━━━┛╰─ comment
-// │ ││    │   │││╰─ comment variable.parameter
-// │ ││    │   ││╰─ comment
-// │ ││    │   │╰─ comment operator
-// │ ││    │   ╰─ comment
-// │ ││    ╰─ comment variable.parameter
-// │ │╰─ comment
+// ┡┛╿┡━━━┛┡━━┛╿╿╿┡━━━┛╰─ comment markup.raw.block
+// │ ││    │   │││╰─ comment markup.raw.block variable.parameter
+// │ ││    │   ││╰─ comment markup.raw.block
+// │ ││    │   │╰─ comment markup.raw.block operator
+// │ ││    │   ╰─ comment markup.raw.block
+// │ ││    ╰─ comment markup.raw.block variable.parameter
+// │ │╰─ comment markup.raw.block
 // │ ╰─ comment comment
 // ╰─ comment
    /// }
-// ┡┛╿╿╿╰─ comment
-// │ ││╰─ comment punctuation.bracket
-// │ │╰─ comment
+// ┡┛╿╿╿╰─ comment markup.raw.block
+// │ ││╰─ comment markup.raw.block punctuation.bracket
+// │ │╰─ comment markup.raw.block
 // │ ╰─ comment comment
 // ╰─ comment
    /// ```
