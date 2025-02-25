@@ -1,3 +1,5 @@
+# See <https://github.com/github-linguist/linguist/blob/main/docs/overrides.md>
 test-grammars/*/*.scm linguist-vendored
 test-grammars/*/src/** linguist-vendored
 test-grammars/*/src/{parser.c,grammar.json,scanner.*} binary
+fixtures/** -linguist-detectable

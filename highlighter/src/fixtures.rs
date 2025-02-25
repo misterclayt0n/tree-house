@@ -396,7 +396,9 @@ pub fn injections_fixture(
                 line_end = src
                     .try_line_to_byte(line_idx + 1)
                     .unwrap_or(src.len_bytes()) as u32;
-                line_labels.is_empty();
+                if line_start == line_end {
+                    break;
+                }
                 if pos > line_start && !injection_stack.is_empty() {
                     line_labels.push((line_start..pos.min(line_end), Vec::new()))
                 }

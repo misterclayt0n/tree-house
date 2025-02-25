@@ -193,6 +193,7 @@ fn lang_for_path(path: &Path, loader: &TestLanguageLoader) -> Language {
     {
         "rs" => loader.get("rust"),
         "html" => loader.get("html"),
+        "erl" => loader.get("erlang"),
         extension => unreachable!("unknown file type .{extension}"),
     }
 }
@@ -251,6 +252,16 @@ fn parameters_within_injections_within_injections() {
     // highlighted as expected.
     highlight_fixture(&loader, "highlighter/injectionception.rs");
     injection_fixture(&loader, "injections/injectionception.rs");
+}
+
+#[test]
+fn html_in_edoc_in_erlang() {
+    let loader = TestLanguageLoader::new();
+    // This fixture exhibited a bug (which has been fixed) where a combined injection became
+    // dormant at the same time as a new highlight started, causing a total reset of all
+    // highlights (incorrectly).
+    highlight_fixture(&loader, "highlighter/html_in_edoc_in_erlang.erl");
+    injection_fixture(&loader, "injections/html_in_edoc_in_erlang.erl");
 }
 
 #[test]

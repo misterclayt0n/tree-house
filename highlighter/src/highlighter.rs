@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::config::{LanguageConfig, LanguageLoader};
 use crate::locals::ScopeCursor;
 use crate::query_iter::{MatchedNode, QueryIter, QueryIterEvent, QueryLoader};
-use crate::{Language, Layer, Syntax};
+use crate::{Injection, Language, Layer, Syntax};
 use arc_swap::ArcSwap;
 use hashbrown::{HashMap, HashSet};
 use ropey::RopeSlice;
@@ -258,7 +258,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                     // state is returned if the layer is finished, if it isn't we have
                     // a combined injection and need to deactivate its highlights
                     if state.is_none() {
-                        self.deactivate_layer(injection.layer);
+                        self.deactivate_layer(injection);
                         refresh = true;
                     } else {
                         self.layer_states.remove(&injection.layer);
@@ -319,15 +319,15 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
         self.active_highlights.append(&mut state.dormant_highlights);
     }
 
-    fn deactivate_layer(&mut self, layer: Layer) {
+    fn deactivate_layer(&mut self, injection: Injection) {
         let LayerData {
             mut parent_highlights,
             ref mut dormant_highlights,
             ..
-        } = self.layer_states.get_mut(&layer).unwrap();
+        } = self.layer_states.get_mut(&injection.layer).unwrap();
         parent_highlights = parent_highlights.min(self.active_highlights.len());
         dormant_highlights.extend(self.active_highlights.drain(parent_highlights..));
-        self.process_highlight_end(self.next_highlight_start);
+        self.process_highlight_end(injection.range.end);
     }
 
     fn start_highlight(&mut self, node: MatchedNode, first_highlight: &mut bool) {
