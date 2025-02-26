@@ -104,7 +104,7 @@ where
                 let start_point = injection.range.start.max(self.range.start);
                 let injection_start = layer
                     .injections
-                    .partition_point(|child| child.range.start < start_point);
+                    .partition_point(|child| child.range.end < start_point);
                 let cursor = self
                     .loader
                     .get_query(layer.language)
