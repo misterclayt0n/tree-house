@@ -101,11 +101,8 @@ impl Syntax {
             ranges: vec![tree_sitter::Range {
                 start_byte: 0,
                 end_byte: u32::MAX,
-                start_point: tree_sitter::Point { row: 0, col: 0 },
-                end_point: tree_sitter::Point {
-                    row: u32::MAX,
-                    col: u32::MAX,
-                },
+                start_point: tree_sitter::Point::ZERO,
+                end_point: tree_sitter::Point::MAX,
             }],
             injections: Vec::new(),
             parent: None,

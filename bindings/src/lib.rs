@@ -28,6 +28,14 @@ pub struct Point {
     pub col: u32,
 }
 
+impl Point {
+    pub const ZERO: Self = Self { row: 0, col: 0 };
+    pub const MAX: Self = Self {
+        row: u32::MAX,
+        col: u32::MAX,
+    };
+}
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Range {
