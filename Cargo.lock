@@ -345,21 +345,9 @@ dependencies = [
 
 [[package]]
 name = "regex-cursor"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae4327b5fde3ae6fda0152128d3d59b95a5aad7be91c405869300091720f7169"
-dependencies = [
- "log",
- "memchr",
- "regex-automata",
- "regex-syntax",
- "ropey",
-]
-
-[[package]]
-name = "regex-cursor"
 version = "0.1.5"
-source = "git+https://github.com/pascalkuthe/regex-cursor#fd4c51c73587981219daf9a36184aabbddae78ee"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0497c781d2f982ae8284d2932aee6a877e58a4541daa5e8fadc18cc75c23a61d"
 dependencies = [
  "log",
  "memchr",
@@ -584,7 +572,7 @@ dependencies = [
  "once_cell",
  "pretty_assertions",
  "regex",
- "regex-cursor 0.1.4",
+ "regex-cursor",
  "ropey",
  "skidder",
  "slab",
@@ -598,7 +586,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "libloading",
- "regex-cursor 0.1.5",
+ "regex-cursor",
  "ropey",
  "thiserror",
 ]

@@ -14,7 +14,7 @@ ropey = ["dep:ropey"]
 
 [dependencies]
 ropey = { version = "1.6", default-features = false, optional=true }
-regex-cursor = { git = "https://github.com/pascalkuthe/regex-cursor" }
+regex-cursor = "0.1.5"
 libloading = "0.8"
 thiserror = "2.0"
 
