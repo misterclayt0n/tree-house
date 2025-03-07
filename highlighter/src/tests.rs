@@ -280,6 +280,18 @@ fn non_local_pattern() {
 }
 
 #[test]
+fn reference_highlight_starts_after_definition_ends() {
+    let loader = TestLanguageLoader::new();
+    // In this example the function name matches one of the parameters. The function name can be
+    // a reference but since the definition occurs after the function name it, the function name
+    // should not be highlighted as a parameter.
+    highlight_fixture(
+        &loader,
+        "highlighter/reference_highlight_starts_after_definition_ends.rs",
+    );
+}
+
+#[test]
 fn combined_injection() {
     let mut loader = TestLanguageLoader::new();
     loader.shadow_injections(

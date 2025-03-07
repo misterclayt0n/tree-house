@@ -350,12 +350,13 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                 .source()
                 .byte_slice(range.start as usize..range.end as usize)
                 .into();
-            let Some(capture) = self
+            let Some(definition) = self
                 .query
                 .syntax()
                 .layer(self.current_layer)
                 .locals
                 .lookup_reference(node.scope, &text)
+                .filter(|def| range.start >= def.range.end)
             else {
                 return;
             };
@@ -363,7 +364,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                 .injection_query
                 .local_definition_captures
                 .load()
-                .get(&capture)
+                .get(&definition.capture)
                 .copied()
         } else {
             config.highlight_query.highlight_indices.load()[node.capture.idx()]
@@ -430,7 +431,7 @@ impl<'a, T: LanguageLoader> QueryLoader<'a> for HighlightQueryLoader<&'a T> {
                 locals_cursor
                     .locals
                     .lookup_reference(locals_cursor.current_scope(), &text)
-                    .is_some()
+                    .is_some_and(|def| range.start >= def.range.start)
             });
             if has_local_reference {
                 return false;

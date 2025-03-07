@@ -51,11 +51,11 @@ impl Locals {
         new_scope_id
     }
 
-    pub fn lookup_reference(&self, mut scope: Scope, name: &str) -> Option<Capture> {
+    pub fn lookup_reference(&self, mut scope: Scope, name: &str) -> Option<&Definition> {
         loop {
             let scope_data = &self[scope];
-            if let Some(&capture) = scope_data.definitions.get(name) {
-                return Some(capture);
+            if let Some(def) = scope_data.definitions.get(name) {
+                return Some(def);
             }
             if !scope_data.inherit {
                 break;
@@ -150,8 +150,14 @@ impl ScopeCursor<'_> {
 }
 
 #[derive(Debug)]
+pub struct Definition {
+    pub capture: Capture,
+    pub range: Range,
+}
+
+#[derive(Debug)]
 pub struct ScopeData {
-    definitions: HashMap<KString, Capture>,
+    definitions: HashMap<KString, Definition>,
     range: Range,
     inherit: bool,
     /// A list of sorted, non-overlapping child scopes.
@@ -211,16 +217,15 @@ impl Syntax {
                 });
             } else if definition_captures.contains_key(&capture) {
                 let text = match source
-                    .byte_slice(
-                        matched_node.node.start_byte() as usize
-                            ..matched_node.node.end_byte() as usize,
-                    )
+                    .byte_slice(range.start as usize..range.end as usize)
                     .into()
                 {
                     Cow::Borrowed(inner) => KString::from_ref(inner),
                     Cow::Owned(inner) => KString::from_string(inner),
                 };
-                locals[scope].definitions.insert(text, capture);
+                locals[scope]
+                    .definitions
+                    .insert(text, Definition { capture, range });
             }
             // NOTE: `local.reference` captures are handled by the highlighter and are not
             // considered during parsing.
