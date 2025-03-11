@@ -341,6 +341,7 @@ fn injection_precedence() {
  "#,
     );
     highlight_fixture(&loader, "highlighter/rust_doc_comment.rs");
+
     loader.shadow_injections(
         "rust",
         r#"
@@ -355,4 +356,24 @@ fn injection_precedence() {
     );
     highlight_fixture(&loader, "highlighter/rust_no_doc_comment.rs");
     injection_fixture(&loader, "injections/rust_no_doc_comment.rs");
+
+    loader.shadow_injections(
+        "rust",
+        r#"
+((macro_invocation
+   macro:
+     [
+       (scoped_identifier
+         name: (_) @_macro_name)
+       (identifier) @_macro_name
+     ]
+   (token_tree . (_) . (_) . (string_literal) @injection.content))
+ (#any-of? @_macro_name
+  ; std
+  "some_macro")
+  (#set! injection.language "rust")
+  (#set! injection.include-children))
+    "#,
+    );
+    injection_fixture(&loader, "injections/overlapping_injection.rs");
 }

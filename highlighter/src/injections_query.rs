@@ -409,7 +409,7 @@ impl Syntax {
             // that injections get sorted to the correct position
             if let Some(last_injection) = injections
                 .last()
-                .filter(|injection| injection.range.end >= matched_node_range.end)
+                .filter(|injection| ranges_intersect(&injection.range, &matched_node_range))
             {
                 // this condition is not needed but serves as fast path
                 // for common cases
@@ -702,4 +702,9 @@ fn intersect_ranges_impl(
     if start != range.end {
         push_range(start..range.end)
     }
+}
+
+fn ranges_intersect(a: &Range, b: &Range) -> bool {
+    // Adapted from <https://github.com/helix-editor/helix/blob/8df58b2e1779dcf0046fb51ae1893c1eebf01e7c/helix-core/src/selection.rs#L156-L163>
+    a.start == b.start || (a.end > b.start && b.end > a.start)
 }
