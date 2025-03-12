@@ -472,7 +472,8 @@ impl Syntax {
             });
             if old_len != insert_position {
                 let inserted = injections.len() - old_len;
-                injections[insert_position..].rotate_right(inserted)
+                injections[insert_position..].rotate_right(inserted);
+                layer_data.ranges[insert_position..].rotate_right(inserted);
             }
         }
 
