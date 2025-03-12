@@ -694,7 +694,7 @@ fn intersect_ranges_impl(
                 push_range(start..parent_range.end)
             }
             let Some(next_parent_range) = parent_ranges.peek() else {
-                break;
+                return;
             };
             start = next_parent_range.start;
         }
