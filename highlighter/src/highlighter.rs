@@ -122,6 +122,8 @@ impl HighlightQuery {
 pub struct Highlight(NonZeroU32);
 
 impl Highlight {
+    pub const MAX: u32 = u32::MAX - 1;
+
     pub const fn new(inner: u32) -> Self {
         assert!(inner != u32::MAX);
         // SAFETY: must be non-zero because `inner` is not `u32::MAX`.
