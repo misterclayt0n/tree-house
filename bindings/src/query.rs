@@ -375,9 +375,9 @@ impl ParserErrorLocation {
                     .next_back()
                     .filter(|s| !s.is_empty())
                     .map(ToOwned::to_owned);
-                line_after = source[line_end + 1..]
-                    .lines()
-                    .next()
+                line_after = source
+                    .get(line_end + 1..)
+                    .and_then(|rest| rest.lines().next())
                     .filter(|s| !s.is_empty())
                     .map(ToOwned::to_owned);
                 break;
