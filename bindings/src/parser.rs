@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::os::raw::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr::NonNull;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{fmt, mem, ptr};
 
 use regex_cursor::Cursor;
@@ -33,7 +33,6 @@ impl Drop for RawParser {
 /// source code.
 pub struct Parser {
     ptr: NonNull<ParserData>,
-    timeout: Option<Duration>,
 }
 
 impl Parser {
@@ -48,7 +47,7 @@ impl Parser {
             }
             None => unsafe { ts_parser_new() },
         };
-        Parser { ptr, timeout: None }
+        Parser { ptr }
     }
 
     /// Set the language that the parser should use for parsing.
@@ -63,7 +62,10 @@ impl Parser {
     }
 
     pub fn set_timeout(&mut self, duration: Duration) {
-        self.timeout = Some(duration);
+        #[allow(deprecated)]
+        unsafe {
+            ts_parser_set_timeout_micros(self.ptr, duration.as_micros().try_into().unwrap());
+        }
     }
 
     /// Set the ranges of text that the parser should include when parsing. By default, the parser
@@ -126,24 +128,9 @@ impl Parser {
             decode: None,
         };
 
-        let options = if let Some(timeout) = self.timeout {
-            unsafe extern "C" fn check_timeout(state: NonNull<ParseState>) -> bool {
-                let &(start, timeout) = state.as_ref().payload.cast().as_ref();
-                Instant::now().duration_since(start) > timeout
-            }
-
-            let start = Instant::now();
-            ParseOptions {
-                payload: Some(NonNull::from(&mut (start, timeout)).cast()),
-                progress_callback: Some(check_timeout),
-            }
-        } else {
-            ParseOptions::default()
-        };
-
         unsafe {
             let old_tree = old_tree.map(|tree| tree.as_raw());
-            let new_tree = ts_parser_parse_with_options(self.ptr, old_tree, input, options);
+            let new_tree = ts_parser_parse(self.ptr, old_tree, input);
             new_tree.map(|raw| Tree::from_raw(raw))
         }
     }
@@ -210,6 +197,7 @@ pub enum InputEncoding {
     Custom,
 }
 
+#[allow(unused)]
 #[repr(C)]
 #[derive(Debug)]
 struct ParseState {
@@ -221,8 +209,10 @@ struct ParseState {
 
 /// A function that accepts the current parser state and returns `true` when the parse should be
 /// cancelled.
+#[allow(unused)]
 type ProgressCallback = unsafe extern "C" fn(state: NonNull<ParseState>) -> bool;
 
+#[allow(unused)]
 #[repr(C)]
 #[derive(Debug, Default)]
 struct ParseOptions {
@@ -260,7 +250,6 @@ extern "C" {
         count: u32,
     ) -> bool;
 
-    /*
     fn ts_parser_parse(
         parser: NonNull<ParserData>,
         old_tree: Option<NonNull<SyntaxTreeData>>,
@@ -274,13 +263,13 @@ extern "C" {
     /// See [`ts_parser_parse`] for more information.
     #[deprecated = "use ts_parser_parse_with_options and pass in a calback instead, this will be removed in 0.26"]
     fn ts_parser_set_timeout_micros(self_: NonNull<ParserData>, timeout_micros: u64);
-    */
 
     /// Use the parser to parse some source code and create a syntax tree, with some options.
     ///
     /// See `ts_parser_parse` for more details.
     ///
     /// See `TSParseOptions` for more details on the options.
+    #[allow(unused)]
     fn ts_parser_parse_with_options(
         parser: NonNull<ParserData>,
         old_tree: Option<NonNull<SyntaxTreeData>>,
