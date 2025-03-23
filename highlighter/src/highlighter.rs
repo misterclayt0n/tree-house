@@ -130,7 +130,7 @@ impl Highlight {
         Self(unsafe { NonZeroU32::new_unchecked(inner ^ u32::MAX) })
     }
 
-    const fn get(&self) -> u32 {
+    pub const fn get(&self) -> u32 {
         self.0.get() ^ u32::MAX
     }
 
