@@ -113,7 +113,9 @@ impl CompilerCommand {
                 }
             }
         } else {
-            cmd.args(["-shared", "-fPIC", "-fno-exceptions", "-o", out_file, "-I"])
+            #[cfg(not(windows))]
+            cmd.arg("-fPIC");
+            cmd.args(["-shared", "-fno-exceptions", "-o", out_file, "-I"])
                 .arg(src_dir);
             if cfg!(all(
                 unix,
