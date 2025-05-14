@@ -33,7 +33,7 @@ indexmap = "2.5.0"
 skidder = { path = "../skidder" }
 
 [dependencies.tree-sitter]
-version = "0.1.0"
+version = "0.1"
 package = "tree-house-bindings"
 path = "../bindings"
 features = ["ropey"]
