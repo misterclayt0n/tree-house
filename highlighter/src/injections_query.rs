@@ -73,7 +73,7 @@ enum InjectionScope {
     },
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 enum IncludedChildren {
     #[default]
     None,
@@ -200,11 +200,7 @@ impl InjectionsQuery {
         source: RopeSlice<'a>,
         loader: impl LanguageLoader,
     ) -> Option<InjectionQueryMatch<'tree>> {
-        let properties = self
-            .injection_properties
-            .get(&query_match.pattern())
-            .cloned()
-            .unwrap_or_default();
+        let properties = self.injection_properties.get(&query_match.pattern());
 
         let mut marker = None;
         let mut last_content_node = 0;
@@ -247,12 +243,11 @@ impl InjectionsQuery {
             }
         }
         let marker = marker.or(properties
-            .language
-            .as_deref()
+            .and_then(|p| p.language.as_deref())
             .map(InjectionLanguageMarker::Name))?;
 
         let language = loader.language_for_marker(marker)?;
-        let scope = if properties.combined {
+        let scope = if properties.is_some_and(|p| p.combined) {
             Some(InjectionScope::Pattern {
                 pattern: query_match.pattern(),
                 language,
@@ -268,7 +263,7 @@ impl InjectionsQuery {
         Some(InjectionQueryMatch {
             language,
             scope,
-            include_children: properties.include_children,
+            include_children: properties.map(|p| p.include_children).unwrap_or_default(),
             node: query_match.matched_node(node_idx).node.clone(),
             last_match: last_content_node == node_idx,
             pattern: query_match.pattern(),
