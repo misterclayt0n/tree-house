@@ -13,7 +13,7 @@ use crate::config::{LanguageConfig, LanguageLoader};
 use crate::fixtures::{check_highlighter_fixture, check_injection_fixture};
 use crate::highlighter::Highlight;
 use crate::injections_query::InjectionLanguageMarker;
-use crate::Language;
+use crate::{Language, Layer};
 
 static GRAMMARS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
     let skidder_config = skidder_config();
@@ -228,6 +228,74 @@ fn injection_fixture(loader: &TestLanguageLoader, fixture: impl AsRef<Path>) {
 fn highlight() {
     let loader = TestLanguageLoader::new();
     highlight_fixture(&loader, "highlighter/hello_world.rs");
+}
+
+#[test]
+fn layers() {
+    let loader = TestLanguageLoader::new();
+
+    let input = "/// Says hello.
+///
+/// this is *markdown-inline* markdown
+/// 
+/// # Example
+///
+/// ```rust
+/// fn add(left: usize, right: usize) -> usize {
+///     left + right
+/// }
+/// ```
+pub fn hello() {}";
+
+    let syntax = crate::Syntax::new(
+        ropey::RopeSlice::from(input),
+        loader.get("rust"),
+        std::time::Duration::from_secs(60),
+        &loader,
+    )
+    .unwrap();
+
+    let assert_injection = |snippet: &str, expected: &[&str]| {
+        assert!(!expected.is_empty(), "all layers have at least 1 injection");
+
+        let layer_lang_name = |layer: Layer| {
+            loader
+                .languages
+                .get_index(syntax.layer(layer).language.idx())
+                .unwrap()
+                .0
+                .clone()
+        };
+
+        let snippet_start = input.find(snippet).unwrap() as u32;
+        let snippet_end = snippet_start + snippet.len() as u32;
+
+        let layers = syntax
+            .layers_for_byte_range(snippet_start, snippet_end)
+            .map(layer_lang_name)
+            .collect::<Vec<_>>();
+
+        assert_eq!(&layers, expected, r#"snippet: "{snippet}""#);
+
+        let layer = syntax.layer_for_byte_range(snippet_start, snippet_end);
+        assert_eq!(
+            &layer_lang_name(layer),
+            expected.last().unwrap(),
+            "last layer is the smallest fully encompassing layer"
+        );
+    };
+
+    // Rust function in a code block in the rust documentation
+    assert_injection("fn add(left: usize, ri", &["rust", "markdown", "rust"]);
+
+    // Markdown heading  `# Example`
+    assert_injection("# Example", &["rust", "markdown"]);
+
+    // Outer-most Rust function `hello`
+    assert_injection("pub fn hello() {}", &["rust"]);
+
+    // Paragraph in the rust documentation
+    assert_injection("markdown-inline", &["rust", "markdown", "markdown-inline"]);
 }
 
 #[test]

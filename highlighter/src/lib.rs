@@ -170,24 +170,34 @@ impl Syntax {
             .descendant_for_byte_range(start, end)
     }
 
+    /// Finds the smallest injection layer that fully includes the range `start..=end`.
     pub fn layer_for_byte_range(&self, start: u32, end: u32) -> Layer {
-        let mut cursor = self.root;
-        loop {
-            let layer = &self.layers[cursor.idx()];
-            let Some(start_injection) = layer.injection_at_byte_idx(start) else {
-                break;
-            };
+        self.layers_for_byte_range(start, end)
+            .last()
+            .expect("always includes the root layer")
+    }
+
+    /// Returns an iterator of layers which **fully include** the byte range `start..=end`,
+    /// in decreasing order based on the size of each layer.
+    ///
+    /// The first layer is always the `root` layer.
+    pub fn layers_for_byte_range(&self, start: u32, end: u32) -> impl Iterator<Item = Layer> + '_ {
+        let mut parent_injection_layer = self.root;
+
+        std::iter::once(self.root).chain(std::iter::from_fn(move || {
+            let layer = &self.layers[parent_injection_layer.idx()];
+
+            let injection_at_start = layer.injection_at_byte_idx(start)?;
+
             // +1 because the end is exclusive.
-            let Some(end_injection) = layer.injection_at_byte_idx(end + 1) else {
-                break;
-            };
-            if start_injection.layer == end_injection.layer {
-                cursor = start_injection.layer;
-            } else {
-                break;
-            }
-        }
-        cursor
+            let injection_at_end = layer.injection_at_byte_idx(end + 1)?;
+
+            (injection_at_start.layer == injection_at_end.layer).then(|| {
+                parent_injection_layer = injection_at_start.layer;
+
+                injection_at_start.layer
+            })
+        }))
     }
 
     pub fn walk(&self) -> TreeCursor {
