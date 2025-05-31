@@ -256,13 +256,14 @@ where
             &mut self.current_injection,
             self.layer_manager.active_injections.pop()?,
         );
-        let layer = replace(
+        let mut layer = replace(
             &mut self.current_layer,
             self.layer_manager
                 .active_layers
                 .remove(&self.current_injection.layer)?,
         );
-        let layer_unfinished = layer.query_iter.peeked.is_some();
+        let layer_unfinished =
+            layer.query_iter.peeked.is_some() || layer.injections.peek().is_some();
         if layer_unfinished {
             self.layer_manager
                 .active_layers
