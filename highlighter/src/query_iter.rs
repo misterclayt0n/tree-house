@@ -3,7 +3,7 @@ use std::iter::Peekable;
 use std::mem::replace;
 use std::ops::RangeBounds;
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use ropey::RopeSlice;
 
 use crate::{
@@ -89,6 +89,8 @@ struct QueryIterLayerManager<'a, 'tree, Loader, S> {
     syntax: &'tree Syntax,
     active_layers: HashMap<Layer, Box<ActiveLayer<'a, 'tree, S>>>,
     active_injections: Vec<Injection>,
+    /// Layers which are known to have no more captures.
+    finished_layers: HashSet<Layer>,
 }
 
 impl<'a, 'tree: 'a, Loader, S> QueryIterLayerManager<'a, 'tree, Loader, S>
@@ -105,16 +107,20 @@ where
                 let injection_start = layer
                     .injections
                     .partition_point(|child| child.range.end < start_point);
-                let cursor = self
-                    .loader
-                    .get_query(layer.language)
-                    .and_then(|query| Some((query, layer.tree()?.root_node())))
-                    .map(|(query, node)| {
-                        let mut cursor = InactiveQueryCursor::new();
-                        cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
-                        cursor.set_byte_range(self.range.clone());
-                        cursor.execute_query(query, &node, RopeInput::new(self.src))
-                    });
+                let cursor = if self.finished_layers.contains(&injection.layer) {
+                    // If the layer has no more captures, skip creating a cursor.
+                    None
+                } else {
+                    self.loader
+                        .get_query(layer.language)
+                        .and_then(|query| Some((query, layer.tree()?.root_node())))
+                        .map(|(query, node)| {
+                            let mut cursor = InactiveQueryCursor::new();
+                            cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
+                            cursor.set_byte_range(self.range.clone());
+                            cursor.execute_query(query, &node, RopeInput::new(self.src))
+                        })
+                };
                 Box::new(ActiveLayer {
                     state: S::default(),
                     query_iter: LayerQueryIter {
@@ -172,6 +178,7 @@ where
             // TODO: reuse allocations with an allocation pool
             active_layers: HashMap::with_capacity(8),
             active_injections: Vec::with_capacity(8),
+            finished_layers: HashSet::with_capacity(8),
         });
         Self {
             current_layer: layer_manager.init_layer(injection.clone()),
@@ -257,6 +264,7 @@ where
                 .insert(injection.layer, layer);
             Some((injection, None))
         } else {
+            self.layer_manager.finished_layers.insert(injection.layer);
             Some((injection, Some(layer.state)))
         }
     }

@@ -194,6 +194,7 @@ fn lang_for_path(path: &Path, loader: &TestLanguageLoader) -> Language {
         "rs" => loader.get("rust"),
         "html" => loader.get("html"),
         "erl" => loader.get("erlang"),
+        "md" => loader.get("markdown"),
         extension => unreachable!("unknown file type .{extension}"),
     }
 }
@@ -310,6 +311,12 @@ fn highlight_overlaps_with_injection() {
 fn rust_parameter_locals() {
     let loader = TestLanguageLoader::new();
     highlight_fixture(&loader, "highlighter/rust_parameter_locals.rs");
+}
+
+#[test]
+fn codefence_rust_doc_comments() {
+    let loader = TestLanguageLoader::new();
+    highlight_fixture(&loader, "highlighter/codefence_rust_doc_comments.md");
 }
 
 #[test]
