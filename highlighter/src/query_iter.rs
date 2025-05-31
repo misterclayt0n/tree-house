@@ -38,7 +38,10 @@ impl<'a, 'tree> LayerQueryIter<'a, 'tree> {
     ) -> Option<&MatchedNode<'tree>> {
         if self.peeked.is_none() {
             loop {
-                let (query_match, node_idx) = self.cursor.as_mut()?.next_matched_node()?;
+                // NOTE: we take the cursor here so that if `next_matched_node` is None the
+                // cursor is dropped and returned to the cache eagerly.
+                let mut cursor = self.cursor.take()?;
+                let (query_match, node_idx) = cursor.next_matched_node()?;
                 let node = query_match.matched_node(node_idx);
                 let match_id = query_match.id();
                 let pattern = query_match.pattern();
@@ -52,6 +55,7 @@ impl<'a, 'tree> LayerQueryIter<'a, 'tree> {
                     &self.scope_cursor,
                 ) {
                     query_match.remove();
+                    self.cursor = Some(cursor);
                     continue;
                 }
 
@@ -63,6 +67,7 @@ impl<'a, 'tree> LayerQueryIter<'a, 'tree> {
                     capture: node.capture,
                     scope,
                 });
+                self.cursor = Some(cursor);
                 break;
             }
         }
