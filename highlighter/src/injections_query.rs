@@ -472,6 +472,13 @@ impl Syntax {
             }
         }
 
+        // Any remaining injections which were not reused should have their layers marked as
+        // modified. These layers might have a new set of ranges (if they were visited) and so
+        // their trees need to be re-parsed.
+        for old_injection in old_injections {
+            self.layer_mut(old_injection.layer).flags.modified = true;
+        }
+
         let layer_data = &mut self.layer_mut(layer);
         layer_data.ranges = parent_ranges;
         layer_data.parse_tree = Some(parse_tree);
@@ -612,11 +619,15 @@ impl Syntax {
         new_range: Range,
         injections: &mut Peekable<impl Iterator<Item = Injection>>,
     ) -> Option<Injection> {
-        loop {
-            let skip = injections.next_if(|injection| injection.range.end <= new_range.start);
-            if skip.is_none() {
-                break;
-            }
+        while let Some(skipped) =
+            injections.next_if(|injection| injection.range.end <= new_range.start)
+        {
+            // If the layer had an injection and now does not have the injection, consider the
+            // skipped layer to be modified so that its tree is re-parsed. It must be re-parsed
+            // since the skipped layer now has a different set of ranges than it used to. Note
+            // that the layer isn't marked as `touched` so it could be discarded if the layer
+            // is not ever visited.
+            self.layer_mut(skipped.layer).flags.modified = true;
         }
         injections
             .next_if(|injection| {

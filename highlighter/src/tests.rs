@@ -7,13 +7,15 @@ use indexmap::{IndexMap, IndexSet};
 use once_cell::sync::Lazy;
 use once_cell::unsync::OnceCell;
 use skidder::Repo;
-use tree_sitter::Grammar;
+use tree_sitter::{Grammar, InputEdit, Point};
 
 use crate::config::{LanguageConfig, LanguageLoader};
 use crate::fixtures::{check_highlighter_fixture, check_injection_fixture};
 use crate::highlighter::Highlight;
 use crate::injections_query::InjectionLanguageMarker;
-use crate::{Language, Layer};
+use crate::{Language, Layer, Syntax};
+
+const PARSE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
 
 static GRAMMARS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
     let skidder_config = skidder_config();
@@ -248,13 +250,7 @@ fn layers() {
 /// ```
 pub fn hello() {}";
 
-    let syntax = crate::Syntax::new(
-        ropey::RopeSlice::from(input),
-        loader.get("rust"),
-        std::time::Duration::from_secs(60),
-        &loader,
-    )
-    .unwrap();
+    let syntax = Syntax::new(input.into(), loader.get("rust"), PARSE_TIMEOUT, &loader).unwrap();
 
     let assert_injection = |snippet: &str, expected: &[&str]| {
         assert!(!expected.is_empty(), "all layers have at least 1 injection");
@@ -451,4 +447,56 @@ fn injection_precedence() {
     "#,
     );
     injection_fixture(&loader, "injections/overlapping_injection.rs");
+}
+
+#[test]
+fn edit_remove_and_add_injection_layer() {
+    let loader = TestLanguageLoader::new();
+    // Add another backtick, causing the double old backtick to become a codefence and the second
+    // HTML comment to become the codefence's body.
+    // When we reuse the injection for the HTML comments, we need to be sure to re-parse the HTML
+    // layer so that it recognizes that the second comment is no longer valid.
+    let before_text = "<!---->\n``\n<!---->";
+    let after_text = "<!---->\n```\n<!---->";
+    let edit = InputEdit {
+        start_byte: 10,
+        old_end_byte: 10,
+        new_end_byte: 11,
+        start_point: Point::ZERO,
+        old_end_point: Point::ZERO,
+        new_end_point: Point::ZERO,
+    };
+    let mut syntax = Syntax::new(
+        before_text.into(),
+        loader.get("markdown"),
+        PARSE_TIMEOUT,
+        &loader,
+    )
+    .unwrap();
+    // The test here is that `Syntax::update` can apply the edit `Ok(_)` without panicking.
+    syntax
+        .update(after_text.into(), PARSE_TIMEOUT, &[edit], &loader)
+        .unwrap();
+
+    // Now test the inverse. Start with the after text and edit it to be the before text. In this
+    // case an injection is added for the HTML comment.
+    let edit = InputEdit {
+        start_byte: 10,
+        old_end_byte: 11,
+        new_end_byte: 10,
+        start_point: Point::ZERO,
+        old_end_point: Point::ZERO,
+        new_end_point: Point::ZERO,
+    };
+    let mut syntax = Syntax::new(
+        after_text.into(),
+        loader.get("markdown"),
+        PARSE_TIMEOUT,
+        &loader,
+    )
+    .unwrap();
+    // The test here is that `Syntax::update` can apply the edit `Ok(_)` without panicking.
+    syntax
+        .update(before_text.into(), PARSE_TIMEOUT, &[edit], &loader)
+        .unwrap();
 }
