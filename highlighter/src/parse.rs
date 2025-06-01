@@ -2,10 +2,10 @@ use std::mem::take;
 use std::time::Duration;
 
 use ropey::RopeSlice;
-use tree_sitter::{InactiveQueryCursor, Parser};
+use tree_sitter::Parser;
 
 use crate::config::LanguageLoader;
-use crate::{Error, LayerData, Syntax, TREE_SITTER_MATCH_LIMIT};
+use crate::{Error, LayerData, Syntax};
 
 impl Syntax {
     pub fn update(
@@ -32,10 +32,6 @@ impl Syntax {
 
         let mut parser = Parser::new();
         parser.set_timeout(timeout);
-        let mut cursor = InactiveQueryCursor::new();
-        // TODO: might need to set cursor range
-        cursor.set_byte_range(0..u32::MAX);
-        cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
 
         while let Some(layer) = queue.pop() {
             let layer_data = self.layer_mut(layer);
