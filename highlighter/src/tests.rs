@@ -42,19 +42,19 @@ struct Overwrites {
     injections: Option<String>,
 }
 
-fn get_grammar(grammar: &str, overwrites: &Overwrites) -> LanguageConfig {
+fn get_grammar(lang_name: &str, overwrites: &Overwrites) -> LanguageConfig {
     let skidder_config = skidder_config();
-    let grammar_dir = skidder_config.grammar_dir(grammar).unwrap();
-    let parser_path = skidder::build_grammar(&skidder_config, grammar, false).unwrap();
-    let grammar = unsafe { Grammar::new(grammar, &parser_path).unwrap() };
+    let grammar_dir = skidder_config.grammar_dir(lang_name).unwrap();
+    let parser_path = skidder::build_grammar(&skidder_config, lang_name, false).unwrap();
+    let grammar = unsafe { Grammar::new(lang_name, &parser_path).unwrap() };
     let highlights_query_path = grammar_dir.join("highlights.scm");
     let injections_query_path = grammar_dir.join("injections.scm");
     if !injections_query_path.exists() {
-        println!("skipping {injections_query_path:?}");
+        println!("\x1b[36mskipping loading of injections for {lang_name:?} since {injections_query_path:?} does not exist\x1b[0m");
     }
     let locals_query_path = grammar_dir.join("locals.scm");
     if !locals_query_path.exists() {
-        println!("skipping {locals_query_path:?}");
+        println!("\x1b[36mskipping loading of locals for {lang_name:?} since {locals_query_path:?} does not exist\x1b[0m");
     }
     LanguageConfig::new(
         grammar,
