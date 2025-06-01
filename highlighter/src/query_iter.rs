@@ -120,10 +120,8 @@ where
                         .get_query(layer.language)
                         .and_then(|query| Some((query, layer.tree()?.root_node())))
                         .map(|(query, node)| {
-                            let mut cursor = InactiveQueryCursor::new();
-                            cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
-                            cursor.set_byte_range(self.range.clone());
-                            cursor.execute_query(query, &node, RopeInput::new(self.src))
+                            InactiveQueryCursor::new(self.range.clone(), TREE_SITTER_MATCH_LIMIT)
+                                .execute_query(query, &node, RopeInput::new(self.src))
                         })
                 };
                 Box::new(ActiveLayer {

@@ -133,14 +133,18 @@ pub struct InactiveQueryCursor {
 }
 
 impl InactiveQueryCursor {
-    pub fn new() -> Self {
-        unsafe {
+    #[must_use]
+    pub fn new(range: Range<u32>, limit: u32) -> Self {
+        let mut this = unsafe {
             with_cache(|cache| {
                 cache.pop().unwrap_or_else(|| InactiveQueryCursor {
                     ptr: NonNull::new_unchecked(ts_query_cursor_new()),
                 })
             })
-        }
+        };
+        this.set_byte_range(range);
+        this.set_match_limit(limit);
+        this
     }
 
     /// Return the maximum number of in-progress matches for this cursor.
@@ -193,7 +197,7 @@ impl InactiveQueryCursor {
 
 impl Default for InactiveQueryCursor {
     fn default() -> Self {
-        Self::new()
+        Self::new(0..u32::MAX, u32::MAX)
     }
 }
 

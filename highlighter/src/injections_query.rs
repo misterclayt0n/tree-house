@@ -290,10 +290,8 @@ impl InjectionsQuery {
         source: RopeSlice<'a>,
         loader: &'a impl LanguageLoader,
     ) -> impl Iterator<Item = InjectionQueryMatch<'a>> + 'a {
-        let mut cursor = InactiveQueryCursor::new();
-        cursor.set_byte_range(0..u32::MAX);
-        cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
-        let mut cursor = cursor.execute_query(&self.injection_query, node, source);
+        let mut cursor = InactiveQueryCursor::new(0..u32::MAX, TREE_SITTER_MATCH_LIMIT)
+            .execute_query(&self.injection_query, node, source);
         let injection_content_capture = self.injection_content_capture.unwrap();
         let iter = iter::from_fn(move || loop {
             let (query_match, node_idx) = cursor.next_matched_node()?;

@@ -189,10 +189,8 @@ impl Syntax {
         }
 
         let root = layer_data.parse_tree.as_ref().unwrap().root_node();
-        let mut cursor = InactiveQueryCursor::new();
-        cursor.set_byte_range(0..u32::MAX);
-        cursor.set_match_limit(TREE_SITTER_MATCH_LIMIT);
-        let mut cursor = cursor.execute_query(&injection_query.local_query, &root, source);
+        let mut cursor = InactiveQueryCursor::new(0..u32::MAX, TREE_SITTER_MATCH_LIMIT)
+            .execute_query(&injection_query.local_query, &root, source);
         let mut locals = Locals::default();
         let mut scope = Scope::ROOT;
 
