@@ -11,21 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added `Syntax::layers_for_byte_range`
 * Added `TreeCursor::reset`
 * Added an iterator for recursively walking over the nodes in a `TreeCursor`: `TreeRecursiveWalker`
 
-### Updated
+### Changed
 
-* Updated the tree-sitter C library to v0.25.6
-
-## [v0.1.1] - 2025-05-14
+* `InactiveQueryCursor::new` now takes the byte range and match limit as parameters
 
 ### Fixed
 
-* Patched `endian.h` to include IllumOS
+* Included `LICENSE` in the crate package
+* Fixed an issue where a combined injection layer could be queried multiple times by `QueryIter`
+* Fixed an issue where a combined injection layer would not be re-parsed when an injection for the layer was removed by an edit
 
 ## [v0.1.0] - 2025-05-13
 
 ### Added
 
 * Initial publish
+
