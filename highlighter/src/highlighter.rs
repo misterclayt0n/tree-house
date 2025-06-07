@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cmp;
 use std::fmt;
 use std::mem::replace;
 use std::num::NonZeroU32;
@@ -386,21 +387,45 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
             config.highlight_query.highlight_indices.load()[node.capture.idx()]
         };
 
+        let highlight = highlight.map(|highlight| HighlightedNode {
+            end: range.end,
+            highlight,
+        });
+
         // If multiple patterns match this exact node, prefer the last one which matched.
         // This matches the precedence of Neovim, Zed, and tree-sitter-cli.
-        if !*first_highlight
-            && self
+        if !*first_highlight {
+            // NOTE: `!*first_highlight` implies that the start positions are the same.
+            let insert_position = self
                 .active_highlights
-                .last()
-                .is_some_and(|prev_node| prev_node.end == range.end)
-        {
-            self.active_highlights.pop();
-        }
-        if let Some(highlight) = highlight {
-            self.active_highlights.push(HighlightedNode {
-                end: range.end,
-                highlight,
-            });
+                .iter()
+                .rposition(|h| h.end <= range.end);
+            if let Some(idx) = insert_position {
+                match self.active_highlights[idx].end.cmp(&range.end) {
+                    // If there is a prior highlight for this start..end range, replace it.
+                    cmp::Ordering::Equal => {
+                        if let Some(highlight) = highlight {
+                            self.active_highlights[idx] = highlight;
+                        } else {
+                            self.active_highlights.remove(idx);
+                        }
+                    }
+                    // Captures are emitted in the order that they are finished. Insert any
+                    // highlights which start at the same position into the active highlights so
+                    // that the ordering invariant remains satisfied.
+                    cmp::Ordering::Less => {
+                        if let Some(highlight) = highlight {
+                            self.active_highlights.insert(idx, highlight)
+                        }
+                    }
+                    // By definition of our `rposition` predicate:
+                    cmp::Ordering::Greater => unreachable!(),
+                }
+            } else {
+                self.active_highlights.extend(highlight);
+            }
+        } else if let Some(highlight) = highlight {
+            self.active_highlights.push(highlight);
             *first_highlight = false;
         }
 
@@ -420,7 +445,7 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                     .map(|layer| layer.parent_highlights)
                     .unwrap_or_default();
 
-                self.active_highlights[layer_start..].is_sorted_by_key(|h| std::cmp::Reverse(h.end))
+                self.active_highlights[layer_start..].is_sorted_by_key(|h| cmp::Reverse(h.end))
             },
             "unsorted highlights on layer {:?}: {:?}\nall active highlights must be sorted by `end` descending",
             self.current_layer,
