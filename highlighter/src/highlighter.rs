@@ -160,6 +160,20 @@ pub struct LayerData {
 pub struct Highlighter<'a, 'tree, Loader: LanguageLoader> {
     query: QueryIter<'a, 'tree, HighlightQueryLoader<&'a Loader>, ()>,
     next_query_event: Option<QueryIterEvent<'tree, ()>>,
+    /// The stack of currently active highlights.
+    /// The ranges of the highlights stack, so each highlight in the Vec must have a starting
+    /// point `>=` the starting point of the next highlight in the Vec and and ending point `<=`
+    /// the ending point of the next highlight in the Vec.
+    ///
+    /// For a visual:
+    ///
+    /// ```text
+    ///     | C |
+    ///   |   B   |
+    /// |     A    |
+    /// ```
+    ///
+    /// would be `vec![A, B, C]`.
     active_highlights: Vec<HighlightedNode>,
     next_highlight_end: u32,
     next_highlight_start: u32,
