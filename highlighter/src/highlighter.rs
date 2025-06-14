@@ -389,6 +389,29 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
             });
             *first_highlight = false;
         }
+
+        // `active_highlights` must be a stack of highlight events the highlights stack on the
+        // prior highlights in the Vec. Each highlight's range must be a subset of the highlight's
+        // range before it.
+        debug_assert!(
+            {
+                // The assertion is actually true for the entire stack but combined injections
+                // throw a wrench in things: the highlight can end after the current injection.
+                // The highlight is removed from `active_highlights` as the injection layer ends
+                // so the wider assertion would be true in practice. We don't track the injection
+                // end right here though so we can't assert on it.
+                let layer_start = self
+                    .layer_states
+                    .get(&self.current_layer)
+                    .map(|layer| layer.parent_highlights)
+                    .unwrap_or_default();
+
+                self.active_highlights[layer_start..].is_sorted_by_key(|h| std::cmp::Reverse(h.end))
+            },
+            "unsorted highlights on layer {:?}: {:?}\nall active highlights must be sorted by `end` descending",
+            self.current_layer,
+            self.active_highlights,
+        );
     }
 }
 
