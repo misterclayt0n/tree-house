@@ -438,7 +438,7 @@ impl Syntax {
                 parse_layer(layer)
             }
             if layer_data.flags.reused {
-                layer_data.flags.modified |= reused_injection.as_ref().map_or(true, |injection| {
+                layer_data.flags.modified |= reused_injection.as_ref().is_none_or(|injection| {
                     injection.matched_node_range != matched_node_range || injection.layer != layer
                 });
             } else if let Some(reused_injection) = reused_injection {
