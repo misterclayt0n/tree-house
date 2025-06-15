@@ -272,13 +272,27 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                 QueryIterEvent::EnterInjection(injection) => self.enter_injection(injection.layer),
                 QueryIterEvent::Match(node) => self.start_highlight(node, &mut first_highlight),
                 QueryIterEvent::ExitInjection { injection, state } => {
-                    // state is returned if the layer is finished, if it isn't we have
-                    // a combined injection and need to deactivate its highlights
-                    if state.is_none() {
+                    // `state` is returned if the layer is finished according to the `QueryIter`.
+                    // The highlighter should only consider a layer finished, though, when it also
+                    // has no remaining ranges to highlight. If the injection is combined and has
+                    // highlight(s) past this injection's range then we should deactivate it
+                    // (saving the highlights for the layer's next injection range) rather than
+                    // removing it.
+                    let parent_start = self
+                        .layer_states
+                        .get(&self.current_layer)
+                        .map(|layer| layer.parent_highlights)
+                        .unwrap_or_default()
+                        .min(self.active_highlights.len());
+                    let layer_is_finished = state.is_some()
+                        && self.active_highlights[parent_start..]
+                            .iter()
+                            .all(|h| h.end <= injection.range.end);
+                    if layer_is_finished {
+                        self.layer_states.remove(&injection.layer);
+                    } else {
                         self.deactivate_layer(injection);
                         refresh = true;
-                    } else {
-                        self.layer_states.remove(&injection.layer);
                     }
                     let active_language = self.query.syntax().layer(self.current_layer).language;
                     self.active_config = self.query.loader().0.get_config(active_language);

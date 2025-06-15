@@ -538,3 +538,21 @@ fn css_parent_child_highlight_precedence() {
     // preserved.
     highlight_fixture(&loader, "highlighter/parent_child_highlight_precedence.css");
 }
+
+#[test]
+fn edoc_code_combined_injection() {
+    let loader = TestLanguageLoader::new();
+
+    highlight_fixture(&loader, "highlighter/edoc_code_combined_injection.erl");
+    injection_fixture(&loader, "injections/edoc_code_combined_injection.erl");
+}
+
+#[test]
+fn edoc_code_combined_injection_in_markdown() {
+    let loader = TestLanguageLoader::new();
+    // Same as the above but within markdown to add extra layers.
+    highlight_fixture(
+        &loader,
+        "highlighter/edoc_code_combined_injection_in_markdown.md",
+    );
+}
