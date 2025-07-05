@@ -5,13 +5,15 @@ on:
     branches:
       - master
 
+env:
+  MSRV: "1.82"
 jobs:
   check-msrv:
     name: Check
     strategy:
       matrix:
         toolchain:
-          - "1.82"
+          - MSRV
           - stable
     runs-on: ubuntu-latest
     steps:
@@ -21,7 +23,7 @@ jobs:
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.toolchain}}
+          toolchain: ${{ matrix.toolchain == 'MSRV' && env.MSRV || 'stable' }}
 
       - uses: Swatinem/rust-cache@v2
 
@@ -37,8 +39,10 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install MSRV toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "${{ env.MSRV }}"
 
       - uses: Swatinem/rust-cache@v2
 
@@ -52,9 +56,10 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install MSRV toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "${{ env.MSRV }}"
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
