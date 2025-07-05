@@ -207,7 +207,7 @@ impl Repo {
                 // true alternative.
                 config.git(&["checkout", branch], &dir)?;
             }
-            config.git(&["reset", "--hard", &format!("origin/{}", branch)], &dir)?;
+            config.git(&["reset", "--hard", &format!("origin/{branch}")], &dir)?;
             return Ok(());
         }
         let _ = fs::create_dir_all(&dir);
