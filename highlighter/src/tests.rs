@@ -447,6 +447,13 @@ fn injection_precedence() {
 }
 
 #[test]
+fn rust_nested_vec() {
+    let loader = TestLanguageLoader::new();
+    highlight_fixture(&loader, "highlighter/nested_vec.rs");
+    injection_fixture(&loader, "injections/nested_vec.rs");
+}
+
+#[test]
 fn edit_remove_and_add_injection_layer() {
     let loader = TestLanguageLoader::new();
     // Add another backtick, causing the double old backtick to become a codefence and the second
