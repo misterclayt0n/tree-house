@@ -278,14 +278,9 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
                     // highlight(s) past this injection's range then we should deactivate it
                     // (saving the highlights for the layer's next injection range) rather than
                     // removing it.
-                    let parent_start = self
-                        .layer_states
-                        .get(&self.current_layer)
-                        .map(|layer| layer.parent_highlights)
-                        .unwrap_or_default()
-                        .min(self.active_highlights.len());
                     let layer_is_finished = state.is_some()
-                        && self.active_highlights[parent_start..]
+                        && self
+                            .current_layer_highlights()
                             .iter()
                             .all(|h| h.end <= injection.range.end);
                     if layer_is_finished {
@@ -338,6 +333,16 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
             .rposition(|highlight| highlight.end != pos)
             .map_or(0, |i| i + 1);
         self.active_highlights.truncate(i);
+    }
+
+    fn current_layer_highlights(&self) -> &[HighlightedNode] {
+        let parent_start = self
+            .layer_states
+            .get(&self.current_layer)
+            .map(|layer| layer.parent_highlights)
+            .unwrap_or_default()
+            .min(self.active_highlights.len());
+        &self.active_highlights[parent_start..]
     }
 
     fn enter_injection(&mut self, layer: Layer) {
@@ -447,20 +452,12 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
         // prior highlights in the Vec. Each highlight's range must be a subset of the highlight's
         // range before it.
         debug_assert!(
-            {
-                // The assertion is actually true for the entire stack but combined injections
-                // throw a wrench in things: the highlight can end after the current injection.
-                // The highlight is removed from `active_highlights` as the injection layer ends
-                // so the wider assertion would be true in practice. We don't track the injection
-                // end right here though so we can't assert on it.
-                let layer_start = self
-                    .layer_states
-                    .get(&self.current_layer)
-                    .map(|layer| layer.parent_highlights)
-                    .unwrap_or_default();
-
-                self.active_highlights[layer_start..].is_sorted_by_key(|h| cmp::Reverse(h.end))
-            },
+            // The assertion is actually true for the entire stack but combined injections
+            // throw a wrench in things: the highlight can end after the current injection.
+            // The highlight is removed from `active_highlights` as the injection layer ends
+            // so the wider assertion would be true in practice. We don't track the injection
+            // end right here though so we can't assert on it.
+            self.current_layer_highlights().is_sorted_by_key(|h| cmp::Reverse(h.end)),
             "unsorted highlights on layer {:?}: {:?}\nall active highlights must be sorted by `end` descending",
             self.current_layer,
             self.active_highlights,
