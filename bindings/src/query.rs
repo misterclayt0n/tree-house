@@ -455,7 +455,7 @@ pub enum ParseError {
         message: String,
         location: ParserErrorLocation,
     },
-    #[error("invalid predicate\n{0}")]
+    #[error("impossible pattern\n{0}")]
     ImpossiblePattern(ParserErrorLocation),
 }
 
