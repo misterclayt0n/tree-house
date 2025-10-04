@@ -119,7 +119,7 @@ impl HighlightQuery {
 ///
 /// This type is represented as a non-max u32 - a u32 which cannot be `u32::MAX`. This is checked
 /// at runtime with assertions in `Highlight::new`.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Highlight(NonZeroU32);
 
 impl Highlight {
@@ -251,6 +251,44 @@ impl<'a, 'tree: 'a, Loader: LanguageLoader> Highlighter<'a, 'tree, Loader> {
 
     pub fn next_event_offset(&self) -> u32 {
         self.next_highlight_start.min(self.next_highlight_end)
+    }
+
+    /// Collects all highlights for the entire range into a Vec of (Highlight, Range) tuples.
+    /// This method consumes events until the highlighter is exhausted.
+    ///
+    /// Note: This returns individual highlight spans, not character ranges. Multiple highlights
+    /// may overlap (due to stacking) and should be applied in order from outer to inner.
+    pub fn collect_highlights(mut self) -> Vec<(Highlight, std::ops::Range<u32>)> {
+        use std::collections::HashMap;
+
+        let mut seen_highlights: HashMap<(Highlight, u32), u32> = HashMap::new();
+        let mut last_pos = 0u32;
+
+        loop {
+            let next_offset = self.next_event_offset();
+            if next_offset == u32::MAX {
+                break;
+            }
+
+            if next_offset > last_pos {
+                last_pos = next_offset;
+            }
+
+            let (_event, _highlights) = self.advance();
+
+            // Record any new highlights we see at this position.
+            // On both Refresh and Push events, active_highlights contains highlights at this position.
+            for &HighlightedNode { end, highlight } in &self.active_highlights {
+                // Record this highlight if we haven't seen this (highlight, end) pair before.
+                seen_highlights.entry((highlight, end)).or_insert(last_pos);
+            }
+        }
+
+        // Convert all seen highlights into ranges.
+        seen_highlights
+            .into_iter()
+            .map(|((highlight, end), start)| (highlight, start..end))
+            .collect()
     }
 
     pub fn advance(&mut self) -> (HighlightEvent, HighlightList<'_>) {
