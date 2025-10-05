@@ -118,6 +118,41 @@ impl Syntax {
         syntax.update(source, timeout, &[], loader).map(|_| syntax)
     }
 
+    /// Create a new Syntax with an old tree for incremental parsing
+    pub fn new_with_old_tree(
+        source: RopeSlice,
+        language: Language,
+        timeout: Duration,
+        loader: &impl LanguageLoader,
+        old_tree: Option<&Tree>,
+        edits: &[tree_sitter::InputEdit],
+    ) -> Result<Self, Error> {
+        let root_layer = LayerData {
+            parse_tree: old_tree.cloned(),
+            language,
+            flags: LayerUpdateFlags::default(),
+            ranges: vec![tree_sitter::Range {
+                start_byte: 0,
+                end_byte: u32::MAX,
+                start_point: tree_sitter::Point::ZERO,
+                end_point: tree_sitter::Point::MAX,
+            }],
+            injections: Vec::new(),
+            parent: None,
+            locals: Locals::default(),
+        };
+        let mut layers = Slab::with_capacity(32);
+        let root = layers.insert(root_layer);
+        let mut syntax = Self {
+            root: Layer(root as u32),
+            layers,
+        };
+
+        syntax
+            .update(source, timeout, edits, loader)
+            .map(|_| syntax)
+    }
+
     pub fn layer(&self, layer: Layer) -> &LayerData {
         &self.layers[layer.idx()]
     }
@@ -200,7 +235,7 @@ impl Syntax {
         }))
     }
 
-    pub fn walk(&self) -> TreeCursor {
+    pub fn walk(&self) -> TreeCursor<'_> {
         TreeCursor::new(self)
     }
 }
