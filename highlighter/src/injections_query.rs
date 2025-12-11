@@ -2,6 +2,7 @@ use std::cmp::Reverse;
 use std::iter::{self, Peekable};
 use std::mem::take;
 use std::sync::Arc;
+use std::time::Instant;
 
 use arc_swap::ArcSwap;
 use hashbrown::{HashMap, HashSet};
@@ -286,30 +287,54 @@ impl InjectionsQuery {
     /// This case should be handled by the calling function
     fn execute<'a>(
         &'a self,
-        node: &Node<'a>,
+        node: &'a Node<'a>,
         source: RopeSlice<'a>,
         loader: &'a impl LanguageLoader,
+        ranges: &'a [tree_sitter::Range],
     ) -> impl Iterator<Item = InjectionQueryMatch<'a>> + 'a {
-        let mut cursor = InactiveQueryCursor::new(0..u32::MAX, TREE_SITTER_MATCH_LIMIT)
-            .execute_query(&self.injection_query, node, source);
+        let mut ranges = ranges.iter();
+        let mut cursor = ranges
+            .next()
+            .map(|range| {
+                InactiveQueryCursor::new(range.start_byte..range.end_byte, TREE_SITTER_MATCH_LIMIT)
+                    .execute_query(&self.injection_query, node, source)
+            })
+            .unwrap_or_else(|| {
+                InactiveQueryCursor::new(0..u32::MAX, TREE_SITTER_MATCH_LIMIT).execute_query(
+                    &self.injection_query,
+                    node,
+                    source,
+                )
+            });
         let injection_content_capture = self.injection_content_capture.unwrap();
         let iter = iter::from_fn(move || loop {
-            let (query_match, node_idx) = cursor.next_matched_node()?;
-            if query_match.matched_node(node_idx).capture != injection_content_capture {
-                continue;
+            if let Some((query_match, node_idx)) = cursor.next_matched_node() {
+                if query_match.matched_node(node_idx).capture != injection_content_capture {
+                    continue;
+                }
+                let Some(mat) = self.process_match(&query_match, node_idx, source, loader) else {
+                    query_match.remove();
+                    continue;
+                };
+                let range = query_match.matched_node(node_idx).node.byte_range();
+                if mat.last_match {
+                    query_match.remove();
+                }
+                if range.is_empty() {
+                    continue;
+                }
+                return Some(mat);
             }
-            let Some(mat) = self.process_match(&query_match, node_idx, source, loader) else {
-                query_match.remove();
-                continue;
+
+            // exhausted current range; advance if more ranges remain
+            let Some(next_range) = ranges.next() else {
+                return None;
             };
-            let range = query_match.matched_node(node_idx).node.byte_range();
-            if mat.last_match {
-                query_match.remove();
-            }
-            if range.is_empty() {
-                continue;
-            }
-            break Some(mat);
+            cursor = InactiveQueryCursor::new(
+                next_range.start_byte..next_range.end_byte,
+                TREE_SITTER_MATCH_LIMIT,
+            )
+            .execute_query(&self.injection_query, node, source);
         });
         let mut buf = Vec::new();
         let mut iter = iter.peekable();
@@ -361,6 +386,7 @@ impl Syntax {
         &mut self,
         layer: Layer,
         edits: &[tree_sitter::InputEdit],
+        query_ranges: &[tree_sitter::Range],
         source: RopeSlice<'_>,
         loader: &impl LanguageLoader,
         mut parse_layer: impl FnMut(Layer),
@@ -378,13 +404,21 @@ impl Syntax {
             return;
         }
 
+        let language = layer_data.language;
+        let mut profile = std::env::var_os("TREE_HOUSE_PROFILE_INJECTIONS")
+            .is_some()
+            .then(|| InjectionProfile::new(query_ranges));
+
         // work around borrow checker
+        let Some(parse_tree) = layer_data.parse_tree.take() else {
+            return;
+        };
         let parent_ranges = take(&mut layer_data.ranges);
-        let parse_tree = layer_data.parse_tree.take().unwrap();
         let mut injections: Vec<Injection> = Vec::with_capacity(layer_data.injections.len());
         let mut old_injections = take(&mut layer_data.injections).into_iter().peekable();
 
-        let injection_query = injections_query.execute(&parse_tree.root_node(), source, loader);
+        let root = parse_tree.root_node();
+        let injection_query = injections_query.execute(&root, source, loader, query_ranges);
 
         let mut combined_injections: HashMap<InjectionScope, Layer> = HashMap::with_capacity(32);
         for mat in injection_query {
@@ -432,6 +466,9 @@ impl Syntax {
                 }),
                 None => self.init_injection(layer, mat.language, reused_injection.clone()),
             };
+            if let Some(profile) = profile.as_mut() {
+                profile.record_match(&matched_node_range);
+            }
             let mut layer_data = self.layer_mut(layer);
             if !layer_data.flags.touched {
                 layer_data.flags.touched = true;
@@ -475,6 +512,10 @@ impl Syntax {
         // their trees need to be re-parsed.
         for old_injection in old_injections {
             self.layer_mut(old_injection.layer).flags.modified = true;
+        }
+
+        if let Some(profile) = profile {
+            profile.finish(language, layer, injections.len());
         }
 
         let layer_data = &mut self.layer_mut(layer);
@@ -712,4 +753,48 @@ fn intersect_ranges_impl(
 fn ranges_intersect(a: &Range, b: &Range) -> bool {
     // Adapted from <https://github.com/helix-editor/helix/blob/8df58b2e1779dcf0046fb51ae1893c1eebf01e7c/helix-core/src/selection.rs#L156-L163>
     a.start == b.start || (a.end > b.start && b.end > a.start)
+}
+
+#[derive(Debug)]
+struct InjectionProfile {
+    start: Instant,
+    range_count: usize,
+    range_bytes: u64,
+    matches: usize,
+    matched_bytes: u64,
+}
+
+impl InjectionProfile {
+    fn new(ranges: &[tree_sitter::Range]) -> Self {
+        let range_bytes = ranges
+            .iter()
+            .map(|range| u64::from(range.end_byte.saturating_sub(range.start_byte)))
+            .sum();
+        Self {
+            start: Instant::now(),
+            range_count: ranges.len(),
+            range_bytes,
+            matches: 0,
+            matched_bytes: 0,
+        }
+    }
+
+    fn record_match(&mut self, range: &Range) {
+        self.matches += 1;
+        self.matched_bytes += u64::from(range.end.saturating_sub(range.start));
+    }
+
+    fn finish(self, language: Language, layer: Layer, injections: usize) {
+        eprintln!(
+            "[tree-house][profile] lang={} layer={} query_ranges={} query_bytes={} matches={} matched_bytes={} injections={} elapsed_ms={:.3}",
+            language.idx(),
+            layer.idx(),
+            self.range_count,
+            self.range_bytes,
+            self.matches,
+            self.matched_bytes,
+            injections,
+            self.start.elapsed().as_secs_f64() * 1000.0,
+        );
+    }
 }
