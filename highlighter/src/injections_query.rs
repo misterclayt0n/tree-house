@@ -365,6 +365,13 @@ impl Syntax {
         loader: &impl LanguageLoader,
         mut parse_layer: impl FnMut(Layer),
     ) {
+        // Skip injection processing if injections are disabled
+        if !self.injections_enabled {
+            // Clear any existing injections to prevent dangling references
+            self.layer_mut(layer).injections.clear();
+            return;
+        }
+
         self.map_injections(layer, None, edits);
         let layer_data = &mut self.layer_mut(layer);
         let Some(LanguageConfig {

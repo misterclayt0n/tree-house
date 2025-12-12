@@ -85,6 +85,10 @@ impl Language {
 pub struct Syntax {
     layers: Slab<LayerData>,
     root: Layer,
+    /// Whether injection parsing is enabled. When disabled, only the root layer
+    /// is parsed, which can significantly improve performance for large files
+    /// with many injections (e.g., files with doc comments, SQL strings, etc.).
+    injections_enabled: bool,
 }
 
 impl Syntax {
@@ -113,6 +117,7 @@ impl Syntax {
         let mut syntax = Self {
             root: Layer(root as u32),
             layers,
+            injections_enabled: true,
         };
 
         syntax.update(source, timeout, &[], loader).map(|_| syntax)
@@ -146,6 +151,7 @@ impl Syntax {
         let mut syntax = Self {
             root: Layer(root as u32),
             layers,
+            injections_enabled: true,
         };
 
         syntax
@@ -237,6 +243,22 @@ impl Syntax {
 
     pub fn walk(&self) -> TreeCursor<'_> {
         TreeCursor::new(self)
+    }
+
+    /// Returns whether injection parsing is enabled.
+    pub fn injections_enabled(&self) -> bool {
+        self.injections_enabled
+    }
+
+    /// Sets whether injection parsing is enabled.
+    ///
+    /// When disabled, only the root layer is parsed, which can significantly
+    /// improve performance for large files with many injections.
+    ///
+    /// Note: After changing this setting, you should call `update()` to
+    /// re-parse with the new setting applied.
+    pub fn set_injections_enabled(&mut self, enabled: bool) {
+        self.injections_enabled = enabled;
     }
 }
 
