@@ -175,6 +175,7 @@ impl Syntax {
         source: RopeSlice<'_>,
         loader: &impl LanguageLoader,
     ) {
+        profile_scope!("run_local_query");
         let layer_data = &mut self.layer_mut(layer);
         let Some(LanguageConfig {
             ref injection_query,

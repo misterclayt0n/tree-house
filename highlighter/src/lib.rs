@@ -1,3 +1,27 @@
+// Tracy profiling macros - must be defined before any module declarations
+macro_rules! profile_scope {
+    ($name:expr) => {
+        #[cfg(feature = "tracy")]
+        let _tracy_span = tracy_client::span!($name);
+        #[cfg(not(feature = "tracy"))]
+        let _ = $name;
+    };
+}
+
+mod config;
+pub mod highlighter;
+mod injections_query;
+mod parse;
+#[cfg(all(test, feature = "fixtures"))]
+mod tests;
+// mod pretty_print;
+#[cfg(feature = "fixtures")]
+pub mod fixtures;
+pub mod locals;
+pub mod query_iter;
+pub mod text_object;
+mod tree_cursor;
+
 use locals::Locals;
 use ropey::RopeSlice;
 
@@ -13,22 +37,6 @@ pub use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
 use crate::parse::LayerUpdateFlags;
 pub use crate::tree_cursor::TreeCursor;
 pub use tree_sitter;
-// pub use pretty_print::pretty_print_tree;
-// pub use tree_cursor::TreeCursor;
-
-mod config;
-pub mod highlighter;
-mod injections_query;
-mod parse;
-#[cfg(all(test, feature = "fixtures"))]
-mod tests;
-// mod pretty_print;
-#[cfg(feature = "fixtures")]
-pub mod fixtures;
-pub mod locals;
-pub mod query_iter;
-pub mod text_object;
-mod tree_cursor;
 
 /// A layer represents a single a single syntax tree that represents (part of)
 /// a file parsed with a tree-sitter grammar. See [`Syntax`].
