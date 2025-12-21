@@ -18,7 +18,7 @@ pub use node::Node;
 pub use parser::{Parser, ParserInputRaw};
 pub use query::{Capture, Pattern, Query, QueryStr};
 pub use query_cursor::{InactiveQueryCursor, MatchedNode, MatchedNodeIdx, QueryCursor, QueryMatch};
-pub use tree::{InputEdit, Tree};
+pub use tree::{ChangedRanges, InputEdit, Tree};
 pub use tree_cursor::TreeCursor;
 
 #[repr(C)]

@@ -360,6 +360,7 @@ impl Syntax {
     pub(crate) fn run_injection_query(
         &mut self,
         layer: Layer,
+        tree_changed: bool,
         edits: &[tree_sitter::InputEdit],
         source: RopeSlice<'_>,
         loader: &impl LanguageLoader,
@@ -372,7 +373,22 @@ impl Syntax {
             return;
         }
 
+        // Map existing injection ranges through edits (this is O(M+N) and always needed).
         self.map_injections(layer, None, edits);
+
+        // If the tree structure didn't change, we can skip the expensive injection query.
+        // The existing injections (with their ranges already mapped through edits) are still valid.
+        if !tree_changed {
+            // Mark existing injection layers as touched so they won't be pruned.
+            let layer_data = self.layer(layer);
+            let injection_layers: Vec<_> =
+                layer_data.injections.iter().map(|inj| inj.layer).collect();
+            for inj_layer in injection_layers {
+                self.layer_mut(inj_layer).flags.touched = true;
+            }
+            return;
+        }
+
         let layer_data = &mut self.layer_mut(layer);
         let Some(LanguageConfig {
             injection_query: ref injections_query,

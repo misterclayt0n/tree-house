@@ -39,6 +39,11 @@ impl Syntax {
                 // Skip re-parsing and querying layers without any ranges.
                 continue;
             }
+
+            // Track whether the tree structure actually changed (not just edits applied).
+            // If the tree structure didn't change, we can skip the expensive injection query.
+            let mut tree_changed = false;
+
             if let Some(tree) = &mut layer_data.parse_tree {
                 if layer_data.flags.moved || layer_data.flags.modified {
                     for edit in edits.iter().rev() {
@@ -49,14 +54,30 @@ impl Syntax {
                     }
                 }
                 if layer_data.flags.modified {
+                    // Save the old tree (shallow copy) to compute changed ranges after parsing.
+                    let old_tree = tree.clone();
                     // Re-parse the tree.
                     layer_data.parse(&mut parser, source, loader)?;
+                    // Check if the tree structure actually changed.
+                    tree_changed = layer_data
+                        .parse_tree
+                        .as_ref()
+                        .is_some_and(|new_tree| !old_tree.changed_ranges(new_tree).is_empty());
                 }
             } else {
                 // always parse if this layer has never been parsed before
                 layer_data.parse(&mut parser, source, loader)?;
+                // First parse always means the tree "changed" (from nothing to something).
+                tree_changed = true;
             }
-            self.run_injection_query(layer, edits, source, loader, |layer| queue.push(layer));
+            self.run_injection_query(
+                layer,
+                tree_changed,
+                edits,
+                source,
+                loader,
+                |layer| queue.push(layer),
+            );
             self.run_local_query(layer, source, loader);
         }
 

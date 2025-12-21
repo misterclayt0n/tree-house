@@ -2,7 +2,7 @@ use std::fmt;
 use std::ptr::NonNull;
 
 use crate::node::{Node, NodeRaw};
-use crate::{Point, TreeCursor};
+use crate::{Point, Range, TreeCursor};
 
 // opaque pointers
 pub(super) enum SyntaxTreeData {}
@@ -30,6 +30,21 @@ impl Tree {
 
     pub fn walk(&self) -> TreeCursor<'_> {
         self.root_node().walk()
+    }
+
+    /// Compare this old edited syntax tree to a new syntax tree representing
+    /// the same document, returning a sequence of ranges whose syntactic
+    /// structure has changed.
+    ///
+    /// For this to work correctly, this tree must have been edited such that its
+    /// ranges match up to the new tree. Generally, you'll want to call this method
+    /// right after calling one of the [`Parser::parse`] functions.
+    /// Call it on the old tree that was passed to the parse function,
+    /// and pass the new tree that was returned from the parse function.
+    pub fn changed_ranges(&self, new_tree: &Tree) -> ChangedRanges {
+        let mut len = 0u32;
+        let ptr = unsafe { ts_tree_get_changed_ranges(self.ptr, new_tree.ptr, &mut len) };
+        ChangedRanges { ptr, len, idx: 0 }
     }
 }
 
@@ -80,6 +95,53 @@ impl InputEdit {
     }
 }
 
+/// An iterator over the ranges that changed between two syntax trees.
+pub struct ChangedRanges {
+    ptr: *mut Range,
+    len: u32,
+    idx: u32,
+}
+
+impl Iterator for ChangedRanges {
+    type Item = Range;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx < self.len {
+            let range = unsafe { *self.ptr.add(self.idx as usize) };
+            self.idx += 1;
+            Some(range)
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = (self.len - self.idx) as usize;
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for ChangedRanges {}
+
+impl ChangedRanges {
+    /// Returns `true` if there are no changed ranges.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+impl Drop for ChangedRanges {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            // Use the standard C library free, which is what tree-sitter uses internally.
+            extern "C" {
+                fn free(ptr: *mut std::ffi::c_void);
+            }
+            unsafe { free(self.ptr.cast()) }
+        }
+    }
+}
+
 extern "C" {
     /// Create a shallow copy of the syntax tree. This is very fast. You need to
     /// copy a syntax tree in order to use it on more than one thread at a time,
@@ -95,4 +157,11 @@ extern "C" {
     /// You must describe the edit both in terms of byte offsets and in terms of
     /// row/column coordinates.
     fn ts_tree_edit(self_: NonNull<SyntaxTreeData>, edit: &InputEdit);
+    /// Compare an old edited syntax tree to a new syntax tree representing the same
+    /// document, returning an array of ranges whose syntactic structure has changed.
+    fn ts_tree_get_changed_ranges(
+        old_tree: NonNull<SyntaxTreeData>,
+        new_tree: NonNull<SyntaxTreeData>,
+        length: *mut u32,
+    ) -> *mut Range;
 }
