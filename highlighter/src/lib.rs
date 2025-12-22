@@ -89,7 +89,7 @@ impl Language {
 /// separate injections. That is done while parsing/running the query capture. As
 /// a result the injections form a tree. Note that such other queries must account for
 /// such multi injection nodes.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Syntax {
     layers: Slab<LayerData>,
     root: Layer,
@@ -268,6 +268,29 @@ impl Syntax {
     pub fn set_injections_enabled(&mut self, enabled: bool) {
         self.injections_enabled = enabled;
     }
+
+    /// Apply edits to all layer trees without full reparse.
+    ///
+    /// This is fast (~100µs) because tree-sitter's `tree.edit()` just adjusts
+    /// byte offsets in existing nodes - no parsing happens. Call this for
+    /// immediate feedback after edits, then follow with a full `update()` call
+    /// (potentially on a background thread) for accurate syntax information.
+    pub fn interpolate(&mut self, edits: &[tree_sitter::InputEdit]) {
+        if edits.is_empty() {
+            return;
+        }
+
+        // Apply edits in reverse order to all layer trees.
+        // Reverse order ensures earlier edits don't invalidate byte positions
+        // of later edits.
+        for (_, layer) in &mut self.layers {
+            if let Some(tree) = &mut layer.parse_tree {
+                for edit in edits.iter().rev() {
+                    tree.edit(edit);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -277,7 +300,7 @@ pub struct Injection {
     matched_node_range: Range,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LayerData {
     pub language: Language,
     parse_tree: Option<Tree>,

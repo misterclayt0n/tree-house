@@ -20,7 +20,7 @@ impl Scope {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Locals {
     scopes: Vec<ScopeData>,
 }
@@ -149,13 +149,13 @@ impl ScopeCursor<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Definition {
     pub capture: Capture,
     pub range: Range,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ScopeData {
     definitions: HashMap<KString, Definition>,
     range: Range,
