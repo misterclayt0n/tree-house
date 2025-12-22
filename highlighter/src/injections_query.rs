@@ -372,7 +372,9 @@ impl Syntax {
             return;
         }
 
+        // Map existing injection ranges through edits (this is O(M+N) and always needed).
         self.map_injections(layer, None, edits);
+
         let layer_data = &mut self.layer_mut(layer);
         let Some(LanguageConfig {
             injection_query: ref injections_query,
@@ -391,6 +393,7 @@ impl Syntax {
         let mut injections: Vec<Injection> = Vec::with_capacity(layer_data.injections.len());
         let mut old_injections = take(&mut layer_data.injections).into_iter().peekable();
 
+        profile_scope!("injection_query_execute");
         let injection_query = injections_query.execute(&parse_tree.root_node(), source, loader);
 
         let mut combined_injections: HashMap<InjectionScope, Layer> = HashMap::with_capacity(32);

@@ -15,6 +15,7 @@ impl Syntax {
         edits: &[tree_sitter::InputEdit],
         loader: &impl LanguageLoader,
     ) -> Result<(), Error> {
+        profile_scope!("Syntax::update");
         // size limit of 512MiB, TS just cannot handle files this big (too
         // slow). Furthermore, TS uses 32 (signed) bit indices so this limit
         // must never be raised above 2GiB
@@ -39,6 +40,7 @@ impl Syntax {
                 // Skip re-parsing and querying layers without any ranges.
                 continue;
             }
+
             if let Some(tree) = &mut layer_data.parse_tree {
                 if layer_data.flags.moved || layer_data.flags.modified {
                     for edit in edits.iter().rev() {
@@ -49,14 +51,17 @@ impl Syntax {
                     }
                 }
                 if layer_data.flags.modified {
-                    // Re-parse the tree.
+                    profile_scope!("layer_parse");
                     layer_data.parse(&mut parser, source, loader)?;
                 }
             } else {
                 // always parse if this layer has never been parsed before
                 layer_data.parse(&mut parser, source, loader)?;
             }
-            self.run_injection_query(layer, edits, source, loader, |layer| queue.push(layer));
+            {
+                profile_scope!("run_injection_query");
+                self.run_injection_query(layer, edits, source, loader, |layer| queue.push(layer));
+            }
             self.run_local_query(layer, source, loader);
         }
 

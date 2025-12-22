@@ -1,3 +1,27 @@
+// Tracy profiling macros - must be defined before any module declarations
+macro_rules! profile_scope {
+    ($name:expr) => {
+        #[cfg(feature = "tracy")]
+        let _tracy_span = tracy_client::span!($name);
+        #[cfg(not(feature = "tracy"))]
+        let _ = $name;
+    };
+}
+
+mod config;
+pub mod highlighter;
+mod injections_query;
+mod parse;
+#[cfg(all(test, feature = "fixtures"))]
+mod tests;
+// mod pretty_print;
+#[cfg(feature = "fixtures")]
+pub mod fixtures;
+pub mod locals;
+pub mod query_iter;
+pub mod text_object;
+mod tree_cursor;
+
 use locals::Locals;
 use ropey::RopeSlice;
 
@@ -13,22 +37,6 @@ pub use crate::injections_query::{InjectionLanguageMarker, InjectionsQuery};
 use crate::parse::LayerUpdateFlags;
 pub use crate::tree_cursor::TreeCursor;
 pub use tree_sitter;
-// pub use pretty_print::pretty_print_tree;
-// pub use tree_cursor::TreeCursor;
-
-mod config;
-pub mod highlighter;
-mod injections_query;
-mod parse;
-#[cfg(all(test, feature = "fixtures"))]
-mod tests;
-// mod pretty_print;
-#[cfg(feature = "fixtures")]
-pub mod fixtures;
-pub mod locals;
-pub mod query_iter;
-pub mod text_object;
-mod tree_cursor;
 
 /// A layer represents a single a single syntax tree that represents (part of)
 /// a file parsed with a tree-sitter grammar. See [`Syntax`].
@@ -81,7 +89,7 @@ impl Language {
 /// separate injections. That is done while parsing/running the query capture. As
 /// a result the injections form a tree. Note that such other queries must account for
 /// such multi injection nodes.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Syntax {
     layers: Slab<LayerData>,
     root: Layer,
@@ -260,6 +268,29 @@ impl Syntax {
     pub fn set_injections_enabled(&mut self, enabled: bool) {
         self.injections_enabled = enabled;
     }
+
+    /// Apply edits to all layer trees without full reparse.
+    ///
+    /// This is fast (~100µs) because tree-sitter's `tree.edit()` just adjusts
+    /// byte offsets in existing nodes - no parsing happens. Call this for
+    /// immediate feedback after edits, then follow with a full `update()` call
+    /// (potentially on a background thread) for accurate syntax information.
+    pub fn interpolate(&mut self, edits: &[tree_sitter::InputEdit]) {
+        if edits.is_empty() {
+            return;
+        }
+
+        // Apply edits in reverse order to all layer trees.
+        // Reverse order ensures earlier edits don't invalidate byte positions
+        // of later edits.
+        for (_, layer) in &mut self.layers {
+            if let Some(tree) = &mut layer.parse_tree {
+                for edit in edits.iter().rev() {
+                    tree.edit(edit);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -269,7 +300,7 @@ pub struct Injection {
     matched_node_range: Range,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LayerData {
     pub language: Language,
     parse_tree: Option<Tree>,

@@ -15,6 +15,7 @@ rust-version = "1.82.0"
 [features]
 default = ["fixtures"]
 fixtures = ["dep:unicode-width", "dep:pretty_assertions"]
+tracy = ["dep:tracy-client"]
 
 [dependencies]
 ropey = { version = "1.6", default-features = false }
@@ -41,3 +42,9 @@ features = ["ropey"]
 version = "1.19"
 default-features = false
 features = ["std", "alloc"]
+
+[dependencies.tracy-client]
+version = "=0.18.2"
+default-features = false
+features = ["enable", "ondemand"]
+optional = true
